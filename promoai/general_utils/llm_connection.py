@@ -18,6 +18,17 @@ from promoai.prompting.prompt_engineering import ERROR_MESSAGE_FOR_MODEL_GENERAT
 
 T = TypeVar("T")
 
+# ----------------------------------------------------------------------------
+# LLM Connection Class
+# ----------------------------------------------------------------------------
+class LLMConnection():
+    def __init__(self, api_key: str, llm_name: str, ai_provider: str, args: Optional[dict] = None):
+        self.api_key = api_key
+        self.llm_name = llm_name
+        self.ai_provider = ai_provider
+        self.args = args
+
+
 # -----------------------------------------------------------------------------
 # Logging
 # -----------------------------------------------------------------------------
