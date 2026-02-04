@@ -1,5 +1,5 @@
 from pm4py import PetriNet
-from powl import convert_to_petri_net
+from powl import convert_from_workflow_net
 from powl.objects.obj import POWL
 
 def convert_workflow_net_to_powl(net: PetriNet) -> POWL:
@@ -12,4 +12,4 @@ def convert_workflow_net_to_powl(net: PetriNet) -> POWL:
     Returns:
     - POWL model
     """
-    return convert_to_petri_net(net)
+    return convert_from_workflow_net(net)
