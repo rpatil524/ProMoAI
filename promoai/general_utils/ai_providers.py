@@ -14,8 +14,8 @@ class AIProviders(Enum):
 
 
 AI_MODEL_DEFAULTS = {
-    AIProviders.GOOGLE.value: "gemini-2.5-pro",
-    AIProviders.OPENAI.value: "gpt-5-mini",
+    AIProviders.GOOGLE.value: "gemini-3-flash",
+    AIProviders.OPENAI.value: "gpt-5.2-codex",
     AIProviders.DEEPSEEK.value: "deepseek-reasoner",
     AIProviders.ANTHROPIC.value: "claude-sonnet-4-20250514",
     AIProviders.DEEPINFRA.value: "openai/gpt-oss-20b",
