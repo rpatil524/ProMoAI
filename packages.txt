@@ -1,1 +1,4 @@
 graphviz
+pkg-config
+libcairo2-dev
+cmake
