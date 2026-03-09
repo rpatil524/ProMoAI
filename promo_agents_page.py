@@ -88,13 +88,13 @@ def chat(llm_credentials: LLMConnection):
 
 
 def run_page():
-    st.title("🤖 ProMoAgents")
+    st.title("🤖 PMAx")
 
-    st.subheader("Process Modeling with Generative AI")
+    st.subheader("Your Process Mining Expert Agent")
 
     if "messages" not in st.session_state:
         st.session_state["messages"] = [
-            {"role": "assistant", "content": "Hey! I am your ProMoAgent assistant. How can I help you today?"}
+            {"role": "assistant", "content": "Hey! I am PMAx. How can I help you today?"}
         ]
     
 

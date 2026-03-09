@@ -52,7 +52,18 @@ def run_page():
                     ai_provider=provider
                 )
                 st.success("Credentials saved! You can now navigate to the ProMoAI page.")
-
+    st.markdown("<br>", unsafe_allow_html=True) # Adds some breathing room
+    st.divider()
+    
+    # Single line: Name [Email Icon] [LinkedIn Icon]
+    st.caption(
+        "Humam Kourani [✉️](mailto:humam.kourani@fit.fraunhofer.de) [🔗](https://linkedin.com/in/johndoe) • "
+        "Alessandro Berti [✉️](mailto:a.berti@pads.rwth-aachen.de) [🔗](https://linkedin.com/in/johndoe) • "
+        "Anton Antonov [✉️](mailto:anton.antonov@fit.fraunhofer.de) [🔗](https://linkedin.com/in/johndoe) • "
+    )
+    st.caption(
+        "ProMoAI is developed at the Fraunhofer Institute for Applied Information Technology FIT. "
+    )
 if __name__ == "__main__":
     run_page()
 
