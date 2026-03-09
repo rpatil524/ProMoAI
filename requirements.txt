@@ -1,4 +1,4 @@
-powl>=2.3.2
+powl>=2.3.3
 pm4py
 setuptools
 streamlit
@@ -12,3 +12,4 @@ matplotlib
 xhtml2pdf
 plotly
 pillow
+cohere
