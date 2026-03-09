@@ -8,15 +8,10 @@ import pandas as pd
 import streamlit as st
 from powl import import_event_log
 from promoai.agents.agents import analyst_node, engineer_node, init_state
-from promoai.general_utils.ai_providers import (
-    AI_HELP_DEFAULTS,
-    AI_MODEL_DEFAULTS,
-    DEFAULT_AI_PROVIDER,
-    MAIN_HELP,
-)
-from promoai.general_utils.app_utils import DISCOVERY_HELP, InputType
+from promoai.general_utils.app_utils import DISCOVERY_HELP
 
 from promoai.general_utils.llm_connection import LLMConnection
+from promoai.general_utils.constants import temp_dir
 
 
 def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
@@ -50,7 +45,6 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
 
 
 def chat(llm_credentials: LLMConnection):
-
     for message in st.session_state.messages:
         display_chat_message(message["role"], message["content"])
 
@@ -93,70 +87,35 @@ def chat(llm_credentials: LLMConnection):
         st.session_state.messages.append({"role": "assistant", "content": report})
 
 
-def run_app():
+def run_page():
     st.title("🤖 ProMoAgents")
 
     st.subheader("Process Modeling with Generative AI")
 
-    temp_dir = "temp"
+    if "messages" not in st.session_state:
+        st.session_state["messages"] = [
+            {"role": "assistant", "content": "Hey! I am your ProMoAgent assistant. How can I help you today?"}
+        ]
+    
 
     os.makedirs(temp_dir, exist_ok=True)
-
-    if "provider" not in st.session_state:
-        st.session_state["provider"] = DEFAULT_AI_PROVIDER
-
-    if "model_name" not in st.session_state:
-        st.session_state["model_name"] = AI_MODEL_DEFAULTS[st.session_state["provider"]]
-
-    if "messages" not in st.session_state:
-        st.session_state["messages"] = []
-
-    def update_model_name():
-        st.session_state["model_name"] = AI_MODEL_DEFAULTS[st.session_state["provider"]]
 
     if "setup_complete" not in st.session_state:
         st.session_state["setup_complete"] = False
 
     if st.session_state["setup_complete"]:
-        if st.sidebar.button("🔄 Change Settings"):
+        if st.sidebar.button("🔄 Reset History"):
             st.session_state["setup_complete"] = False
-            del st.session_state["uploaded_log"]
-            del st.session_state["agent_state"]
-            del st.session_state["messages"]
+            if "uploaded_log" in st.session_state:
+                del st.session_state["uploaded_log"]
+            if "agent_state" in st.session_state:
+                del st.session_state["agent_state"]
+            if "messages" in st.session_state:
+                del st.session_state["messages"]
             st.rerun()
 
     if not st.session_state["setup_complete"]:
         st.header("🔧 Agents Setup")
-        with st.expander("🔒 Credentials", expanded=True):
-            provider = st.selectbox(
-                "Choose AI Provider:",
-                options=AI_MODEL_DEFAULTS.keys(),
-                index=0,
-                help=MAIN_HELP,
-                on_change=update_model_name,
-                key="provider",
-            )
-
-            if (
-                "model_name" not in st.session_state
-                or st.session_state["provider"] != provider
-            ):
-                st.session_state["model_name"] = AI_MODEL_DEFAULTS[provider]
-
-            col1, col2 = st.columns(2)
-            with col1:
-                ai_model_name = st.text_input(
-                    "Enter the AI model name:",
-                    key="model_name",
-                    help=AI_HELP_DEFAULTS[st.session_state["provider"]],
-                )
-            with col2:
-                api_key = st.text_input("API key:", type="password")
-                st.session_state["llm_credentials"] = LLMConnection(
-                    api_key=api_key, llm_name=ai_model_name, ai_provider=provider
-                )
-
-        InputType.DATA.value
 
         with st.form(key="model_gen_form"):
             uploaded_log = st.file_uploader(
@@ -166,8 +125,8 @@ def run_app():
             )
             submission_button = st.form_submit_button(label="Start Analysis 🚀")
             if submission_button:
-                if not api_key:
-                    st.error(body="Please enter your API key!", icon="⚠️")
+                if "llm_credentials" not in st.session_state:
+                    st.error(body="Please complete the setup on the main page!", icon="⚠️")
                     return
                 if uploaded_log is None:
                     st.error(body="No file is selected!", icon="⚠️")
@@ -209,5 +168,4 @@ if __name__ == "__main__":
     os.environ["MPLBACKEND"] = "Agg"
 
     st.set_page_config(page_title="ProMoAgents", page_icon="🤖")
-    # footer()
-    run_app()
+    run_page()

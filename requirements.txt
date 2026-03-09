@@ -1,4 +1,4 @@
-powl>=2.1.2
+powl>=2.3.2
 pm4py
 setuptools
 streamlit

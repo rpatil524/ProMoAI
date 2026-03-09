@@ -14,60 +14,19 @@ from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from powl import convert_to_bpmn, import_event_log
 from powl.conversion.variants.to_petri_net import apply as convert_to_petri_net
-from promoai.general_utils.ai_providers import (
-    AI_HELP_DEFAULTS,
-    AI_MODEL_DEFAULTS,
-    DEFAULT_AI_PROVIDER,
-    MAIN_HELP,
-)
 from promoai.general_utils.app_utils import DISCOVERY_HELP, InputType, ViewType
+from promoai.general_utils.constants import temp_dir
 
 
 def run_model_generator_app():
     subprocess.run(["streamlit", "run", __file__])
 
 
-def run_app():
+def run_page():
     st.title("🤖 ProMoAI")
 
     st.subheader("Process Modeling with Generative AI")
 
-    temp_dir = "temp"
-
-    if "provider" not in st.session_state:
-        st.session_state["provider"] = DEFAULT_AI_PROVIDER
-
-    if "model_name" not in st.session_state:
-        st.session_state["model_name"] = AI_MODEL_DEFAULTS[st.session_state["provider"]]
-
-    def update_model_name():
-        st.session_state["model_name"] = AI_MODEL_DEFAULTS[st.session_state["provider"]]
-
-    with st.expander("🔧 Configuration", expanded=True):
-        provider = st.selectbox(
-            "Choose AI Provider:",
-            options=AI_MODEL_DEFAULTS.keys(),
-            index=0,
-            help=MAIN_HELP,
-            on_change=update_model_name,
-            key="provider",
-        )
-
-        if (
-            "model_name" not in st.session_state
-            or st.session_state["provider"] != provider
-        ):
-            st.session_state["model_name"] = AI_MODEL_DEFAULTS[provider]
-
-        col1, col2 = st.columns(2)
-        with col1:
-            ai_model_name = st.text_input(
-                "Enter the AI model name:",
-                key="model_name",
-                help=AI_HELP_DEFAULTS[st.session_state["provider"]],
-            )
-        with col2:
-            api_key = st.text_input("API key:", type="password")
 
     if "selected_mode" not in st.session_state:
         st.session_state["selected_mode"] = "Model Generation"
@@ -92,12 +51,15 @@ def run_app():
 
             submit_button = st.form_submit_button(label="Run")
             if submit_button:
+                if "llm_credentials" not in st.session_state:
+                    st.error(body="Please complete the setup on the main page!", icon="⚠️")
+                    return
                 try:
                     process_model = promoai.generate_model_from_text(
                         description,
-                        api_key=api_key,
-                        ai_model=ai_model_name,
-                        ai_provider=provider,
+                        api_key=st.session_state["llm_credentials"].api_key,
+                        ai_model=st.session_state["llm_credentials"].llm_name,
+                        ai_provider=st.session_state["llm_credentials"].ai_provider,
                     )
 
                     st.session_state["model_gen"] = process_model
@@ -215,13 +177,16 @@ def run_app():
                 with st.form(key="feedback_form"):
                     feedback = st.text_area("Feedback:", value="")
                     if st.form_submit_button(label="Update Model"):
+                        if "llm_credentials" not in st.session_state:
+                            st.error(body="Please complete the setup on the main page!", icon="⚠️")
+                            return
                         try:
                             process_model = st.session_state["model_gen"]
                             process_model.update(
                                 feedback,
-                                api_key=api_key,
-                                ai_model=ai_model_name,
-                                ai_provider=provider,
+                                api_key=st.session_state["llm_credentials"].api_key,
+                                ai_model=st.session_state["llm_credentials"].llm_name,
+                                ai_provider=st.session_state["llm_credentials"].ai_provider,
                             )
                             st.session_state["model_gen"] = process_model
                         except Exception as e:
@@ -292,67 +257,5 @@ def run_app():
         except Exception as e:
             st.error(icon="⚠️", body=str(e))
 
-
-def footer():
-    style = """
-        <style>
-          .footer-container {
-              position: fixed;
-              left: 0;
-              bottom: 0;
-              width: 100%;
-              text-align: center;
-              padding: 15px 0;
-              background-color: white;
-              border-top: 2px solid lightgrey;
-              z-index: 100;
-          }
-
-          .footer-text, .header-text {
-              margin: 0;
-              padding: 0;
-          }
-          .footer-links {
-              margin: 0;
-              padding: 0;
-          }
-          .footer-links a {
-              margin: 0 10px;
-              text-decoration: none;
-              color: blue;
-          }
-          .footer-links img {
-              vertical-align: middle;
-          }
-        </style>
-        """
-
-    foot = f"""
-        <div class='footer-container'>
-            <div class='footer-text'>
-                Developed by
-                <a href="https://www.linkedin.com/in/humam-kourani-98b342232/" target="_blank" style="text-decoration:none;">Humam Kourani</a>
-                and
-                <a href="https://www.linkedin.com/in/alessandro-berti-2a483766/" target="_blank" style="text-decoration:none;">Alessandro Berti</a>
-                at the
-                <a href="https://www.fit.fraunhofer.de/" target="_blank" style="text-decoration:none;">Fraunhofer Institute for Applied Information Technology FIT</a>.
-            </div>
-            <div class='footer-links'>
-                <a href="https://doi.org/10.24963/ijcai.2024/1014" target="_blank">
-                    <img src="https://img.shields.io/badge/ProMoAI:%20Process%20Modeling%20with%20Generative%20AI-gray?logo=googledocs&logoColor=white&labelColor=red" alt="ProMoAI Paper">
-                </a>
-                <a href="mailto:humam.kourani@fit.fraunhofer.de?cc=a.berti@pads.rwth-aachen.de;" target="_blank">
-                    <img src="https://img.shields.io/badge/Email-gray?logo=minutemailer&logoColor=white&labelColor=green" alt="Email Humam Kourani">
-                </a>
-            </div>
-        </div>
-        """
-
-    st.markdown(style, unsafe_allow_html=True)
-    st.markdown(foot, unsafe_allow_html=True)
-
-
 if __name__ == "__main__":
-    st.set_page_config(page_title="ProMoAI", page_icon="🤖")
-    footer()
-    run_app()
+    run_page()
