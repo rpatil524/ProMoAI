@@ -50,12 +50,11 @@ class BPMNAnalyzer:
                 role="system",
                 xml_string=bpmn_xml_string,
                 json_abstraction=bpmn_json_string,
-                selected_elements_json=selected_elements_json,
             )
         )
 
         self.last_response = None
-        self.ask(initial_query)
+        self.ask(initial_query, selected_elements_json=selected_elements_json)
 
     def get_last_response(self) -> str | None:
         return self.last_response
@@ -64,8 +63,12 @@ class BPMNAnalyzer:
 
         if selected_elements_json:
             selected_elements_query = f"\n \n The user has now exclusively selected the following elements of the BPMN model (represented as a json): {selected_elements_json}"
-            system_message = create_message(message=selected_elements_query, role="system", model_abstraction=self.model_abstraction)
-            self._conversation.append(system_message)
+        else:
+            selected_elements_query = f"\n \n The user has now selected no elements."
+        # remove last system messages containing previously selected elements
+        self._conversation = self._conversation[:2] + [m for m in self._conversation[2:] if m["role"] != "system"] 
+        system_message = create_message(message=selected_elements_query, role="system", model_abstraction=self.model_abstraction)
+        self._conversation.append(system_message)
         
         user_message_content = create_message(
             query, role="user", model_abstraction=self.model_abstraction
