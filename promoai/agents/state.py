@@ -74,8 +74,31 @@ class ProcessState(dict):
         return self.__str__()
 
     def generate_log_abstraction(self):
-        return f"Event log with {len(self['event_log'])} events and the following attributes: {list(self['event_log'].columns) if len(self['event_log']) > 0 else 'No events'}"
+        df = self['event_log']
+        
+        if df is None or len(df) == 0:
+            return "The event log is empty."
 
+        # Basic Stats
+        msg = f"Event Log Abstraction:\n"
+        msg += f"- Total Events: {len(df)}\n"
+        msg += f"- Total Cases: {df['case:concept:name'].nunique() if 'case:concept:name' in df.columns else 'N/A'}\n"
+        if 'concept:name' in df.columns:
+            msg += f"- Unique activities: {df['concept:name'].dropna().unique().tolist()}\n"
+        msg += "- Columns & Samples:\n"
+
+        for col in df.columns:
+            col_type = df[col].dtype
+            
+            sample_data = df[col].dropna().unique()[:10].tolist()
+            
+            if "datetime" in str(col_type):
+                sample_data = [str(x) for x in sample_data]
+
+            msg += f"  * '{col}' (Type: {col_type}): {sample_data}\n"
+
+        return msg
+    
     def add_context(self, description: str):
         self["context"].append(description)
 

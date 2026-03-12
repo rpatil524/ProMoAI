@@ -2,7 +2,7 @@ import streamlit as st
 
 def run_app():
     pg = st.navigation([
-        st.Page("setup.py", title="Setup", icon="⚙️"),
+        st.Page("setup_page.py", title="Setup", icon="⚙️"),
         st.Page("promoai_page.py", title="ProMoAI", icon="🤖"),
         st.Page("promo_agents_page.py", title="ProMoAgents", icon="🕵🏻"),
     ])

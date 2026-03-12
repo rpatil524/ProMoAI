@@ -13,3 +13,5 @@ xhtml2pdf
 plotly
 pillow
 cohere
+kaleido
+markdown

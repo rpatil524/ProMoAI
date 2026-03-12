@@ -9,6 +9,12 @@ from promoai.general_utils.llm_connection import (
     generate_result_with_error_handling,
     LLMConnection,
 )
+ERROR_MESSAGE_CODE_GENERATION_ENG = """
+Please update the model to fix the error. Make sure" \
+                          f" to save the updated final event log is the variable 'final_event_log'. """
+
+ERROR_MESSAGE_CODE_GENERATION_ANALYST = """
+Please update the model to fix the error. Make sure to save the final report in the variable 'final_report' as a list of dictionaries with keys 'type' and 'content', where 'type' can be either 'text' or 'artifact'. For artifacts, the content should be the key referencing the artifact (e.g., 'artifact_0') that you want to include in the report."""
 
 
 def init_state(user_request: str, event_log) -> ProcessState:
@@ -61,6 +67,7 @@ def engineer_node(
         llm_args=LLMCredentials.args,
         max_iterations=3,
         additional_iterations=2,
+        standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ENG
     )
     state["event_log"] = result
     state["log_abstraction"] = state.generate_log_abstraction()
@@ -86,6 +93,7 @@ def update_message_for_analyst(last_request: str, context: str) -> str:
     \n
     - Make sure to follow the strict rules introduced in the initial message (e.g., referencing artifacts by their exact keys, including the visualization if the user asked for it and it is provided, etc.) when generating your report.
     - Do NOT mention any errors or internal processing steps. Your report should be a polished analysis that directly addresses the user's request using the provided artifacts as evidence to support your conclusions.
+    - AVOID adding a dataframe/table to the report unless the user EXPLICITLY asks for it. Instead, summarize the key insights from it.
     You will receive the artifacts in the consequent message.
     """
 
@@ -109,7 +117,7 @@ def generate_initial_message_for_analyst(state: ProcessState, context) -> str:
     TASK:
     Construct the `final_report` variable. Interleave your analysis with the relevant artifact keys (e.g., "artifact_0").
     - If an artifact is a visualization (PNG), use it to support your findings.
-    - If an artifact is a table (CSV), summarize the key insights in text rather than displaying the whole table instead of adding the entire potentially large table to your report unless explicitly asked by the user.
+    - If an artifact is a table (CSV), summarize the key insights in text if it's relevant. DO NOT include the dataframe in the report unless EXPLICITLY stated by user in the request.
     - For visualizations, you will get an abstraction in form of a description (content of the artifact or its summary). Use it to identify if it is relevant and to support your analysis.
 
     OUTPUT FORMAT:
@@ -130,7 +138,9 @@ def generate_initial_message_for_analyst(state: ProcessState, context) -> str:
     3. If the user asked for a visualization and it is provided in the ARTIFACTS section, you MUST include it in the report.
     4. You may reuse artifacts from previous iterations by referencing their keys, but you cannot introduce new artifacts that were not provided in the ARTIFACTS section.
     5. Before generating the report, carefully analyze the provided artifacts, respond after making sure you have fully utilized the available information to answer the user's request.
-    """
+    6. In the text, DO NOT refer to the artifacts as "artifact_0" but rather as "the chart above", "the chart below", etc. based on the type of artifact and its relevance to the analysis.
+    7. DO NOT include dataframes in your report unless explicitly asked, instead, summarize the key insights from the dataframe in text form.
+"""
     return msg
 
 
@@ -176,6 +186,7 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
         for k, v in artifact_id_to_description_and_content.items()
         if v["type"] == "dataframe"
     }
+    long_dfs = [k for k, v in artifact_dataframes.items() if len(str(v['content'])) > 500]
     artifact_df_strings = "\n".join(
         [
             f"\n =====DATAFRAME {k}======:\n Description: {v['description']} \n Content: {v['content']} \n \
@@ -184,6 +195,7 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
             if k not in sent_artifacts
         ]
     )
+    artifact_df_strings += "\n \n IMPORTANT: DATAFRAMES SHOULD NOT BE INCLUDED IN THE REPORT IF THE USER DID NOT REQUEST THEM EXPLICITLY. \n \n"
 
     artifact_viz = {
         k: v
@@ -220,7 +232,7 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
 
     valid_artifact_ids = list(artifact_id_to_description_and_content.keys())
     partial_function = partial(
-        code_extraction_report, valid_artifact_ids=valid_artifact_ids
+        code_extraction_report, valid_artifact_ids=valid_artifact_ids, long_dfs = long_dfs
     )
     try:
         result, _, messages = generate_result_with_error_handling(
@@ -232,6 +244,7 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
             llm_args=LLMCredentials.args,
             max_iterations=3,
             additional_iterations=2,
+            standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ANALYST
         )
         state["sent_artifacts"].extend(
             list(artifact_id_to_description_and_content.keys())

@@ -13,7 +13,75 @@ from promoai.general_utils.app_utils import DISCOVERY_HELP
 from promoai.general_utils.llm_connection import LLMConnection
 from promoai.general_utils.constants import temp_dir
 
+from xhtml2pdf import pisa
+from io import BytesIO
+import base64
+import base64
+import os
+import pandas as pd
+from io import BytesIO
+from xhtml2pdf import pisa
+import markdown
 
+def export_messages_to_pdf(messages) -> bytes:
+    html_content = f"""
+    <html>
+    <head>
+        <style>
+            @page {{ size: a4; margin: 1cm; }}
+            body {{ font-family: Helvetica, Arial, sans-serif; font-size: 10pt; line-height: 1.5; }}
+            .user {{ color: #2e77d0; font-weight: bold; margin-top: 15px; border-bottom: 1px solid #2e77d0; }}
+            .assistant {{ color: #e63946; font-weight: bold; margin-top: 15px; border-bottom: 1px solid #e63946; }}
+            .text {{ margin-bottom: 10px; }}
+            table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
+            th, td {{ border: 1px solid #ccc; padding: 4px; text-align: left; font-size: 8pt; }}
+            th {{ background-color: #f2f2f2; }}
+            img {{ max-width: 100%; height: auto; display: block; margin: 10px auto; }}
+        </style>
+    </head>
+    <body>
+        <h1 style="text-align: center;">PMAx Analysis Report</h1>
+    """
+
+    for msg in messages:
+        role_label = "User" if msg["role"] == "user" else "PMAx"
+        html_content += f"<div class='{msg['role']}'>{role_label}</div>"
+
+        blocks = msg["content"]
+        if not isinstance(blocks, list):
+            blocks = [{"type": "text", "content": blocks}]
+
+        for block in blocks:
+            b_type = block.get("type")
+            b_val = block.get("content")
+
+            if b_type == "text":
+                # Use markdown library for cleaner HTML (faster for the PDF engine)
+                clean_text = markdown.markdown(b_val)
+                html_content += f"<div class='text'>{clean_text}</div>"
+            
+            elif b_type == "artifact":
+                if os.path.exists(b_val):
+                    if b_val.lower().endswith(('.png', '.jpg', '.jpeg')):
+                        # INSTEAD OF BASE64: Use absolute file path
+                        abs_path = os.path.abspath(b_val)
+                        html_content += f"<div class='text'><img src='{abs_path}'></div>"
+                    
+                    elif b_val.lower().endswith('.csv'):
+                        df = pd.read_csv(b_val)
+                        # LIMIT ROWS: PDF tables shouldn't be 1000 rows long
+                        if len(df) > 30:
+                            html_content += "<p><i>(Showing first 30 rows of data)</i></p>"
+                            df = df.head(30)
+                        html_content += df.to_html(index=False)
+
+    html_content += "</body></html>"
+
+    pdf_buffer = BytesIO()
+    # xhtml2pdf works better with file paths if we provide a path helper
+    pisa_status = pisa.CreatePDF(html_content, dest=pdf_buffer)
+    
+    return None if pisa_status.err else pdf_buffer.getvalue()
 def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
     """Renders either a simple string or a structured artifact report."""
     with st.chat_message(role):
@@ -27,6 +95,7 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
                     st.markdown(b_val)
 
                 elif b_type == "artifact":
+                    st.markdown(f"**Artifact:**")
                     if not os.path.exists(b_val):
                         st.error(f"File missing: {b_val}")
                         continue
@@ -36,9 +105,17 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
                         st.image(b_val, use_container_width=True)
                     elif b_val.lower().endswith(".csv"):
                         df = pd.read_csv(b_val)
+                        # show only the first 30 rows
+                        if len(df) > 30:
+                            st.markdown("<p><i>(Showing first 30 rows of data)</i></p>", unsafe_allow_html=True)
+                            df = df.head(30)
                         st.dataframe(df, use_container_width=True)
                     elif b_val.lower().endswith(".parquet"):
                         df = pd.read_parquet(b_val)
+                        # show only the first 30 rows
+                        if len(df) > 30:
+                            st.markdown("<p><i>(Showing first 30 rows of data)</i></p>", unsafe_allow_html=True)
+                            df = df.head(30)
                         st.dataframe(df, use_container_width=True)
         else:
             st.markdown(content)
@@ -113,6 +190,27 @@ def run_page():
             if "messages" in st.session_state:
                 del st.session_state["messages"]
             st.rerun()
+        if st.sidebar.button("Build PDF Report"):
+            pdf_bytes = None
+            if st.session_state.messages:
+                with st.spinner("Converting chat and artifacts to PDF..."):
+                    pdf_bytes = export_messages_to_pdf(st.session_state.messages)
+                    if pdf_bytes:
+                        st.sidebar.success("Successfully built PDF report!")
+                    else:
+                        st.sidebar.error("Error: Failed to generate PDF report.")
+            else:
+                st.sidebar.warning("No messages to export.")
+            
+            if pdf_bytes:
+                st.sidebar.download_button(
+                    label="📥 Download PDF Report",
+                    data=pdf_bytes,
+                    file_name="pmax_analysis_report.pdf",
+                    mime="application/pdf"
+            )
+
+
 
     if not st.session_state["setup_complete"]:
         st.header("🔧 Agents Setup")
@@ -167,5 +265,5 @@ def run_page():
 if __name__ == "__main__":
     os.environ["MPLBACKEND"] = "Agg"
 
-    st.set_page_config(page_title="ProMoAgents", page_icon="🤖")
+    st.set_page_config(page_title="PMAx", page_icon="🤖")
     run_page()

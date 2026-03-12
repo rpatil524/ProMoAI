@@ -124,7 +124,7 @@ def _check_code_for_compilation(generated_code: str):
         raise Exception(f"Generated code contains syntax errors: {e}")
 
 
-def code_extraction_report(code_snippet: str, args, valid_artifact_ids: list):
+def code_extraction_report(code_snippet: str, args, valid_artifact_ids: list, long_dfs: list):
     """
     Extracts code from a given code snippet, removing any markdown formatting.
     """
@@ -159,6 +159,10 @@ def code_extraction_report(code_snippet: str, args, valid_artifact_ids: list):
         elif entry["type"] not in ["text", "artifact"]:
             raise Exception(
                 f"Invalid type in final_report: {entry['type']}. Expected 'text' or 'artifact'."
+            )
+        if entry["content"] in long_dfs:
+            raise Exception(
+                f"The report references a dataframe artifact ({entry['content']}) that is too long to include in the report. Please summarize the dataframe instead of including it directly."
             )
 
     return final_report, None
