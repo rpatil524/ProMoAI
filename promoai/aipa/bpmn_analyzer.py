@@ -50,27 +50,35 @@ class BPMNAnalyzer:
                 role="system",
                 xml_string=bpmn_xml_string,
                 json_abstraction=bpmn_json_string,
-                selected_elements_json=selected_elements_json,
             )
         )
 
         self.last_response = None
-        self.ask(initial_query)
+        self.ask(initial_query, selected_elements_json=selected_elements_json)
 
     def get_last_response(self) -> str | None:
         return self.last_response
 
-    def ask(self, query: str) -> str | None:
+    def ask(self, query: str, selected_elements_json: str = None) -> str | None:
 
-        user_message_content = create_message(
+        user_message = create_message(
             query, role="user", model_abstraction=self.model_abstraction
         )
-        self._conversation.append(user_message_content)
+
+        if selected_elements_json:
+            selected_elements_query = f"\n \n The user has exclusively selected the following elements of the BPMN model (represented as a json): {selected_elements_json}"
+        else:
+            selected_elements_query = f"\n \n The user has not selected any elements."
+            
+        system_message = create_message(message=selected_elements_query, role="system", model_abstraction=self.model_abstraction)
+        llm_messages = self._conversation + [system_message, user_message]
 
         self.last_response = query_llm(
-            conversation=self._conversation,
+            conversation=llm_messages,
             api_key=self.api_key,
             llm_name=self.ai_model,
             ai_provider=self.ai_provider,
         )
+        
+        self._conversation.append(user_message)
         self._conversation.append({"role": "assistant", "content": self.last_response})
