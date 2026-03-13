@@ -7,7 +7,7 @@ ProMoAI leverages Large Language Models for the automatic generation of process 
 ## Launching as a Streamlit App
 You have two options for running ProMoAI.
 * *On the cloud:* under https://promoai.streamlit.app/.
-* *Locally:* by cloning this repository, installing the required environment and packages, and then running 'streamlit run app.py'.
+* *Locally:* by cloning this repository, installing the required environment and packages, and then running `streamlit run start.py` or `python start.py`.
 
 ## Installing as a Python Library
 Run pip install promoai.
