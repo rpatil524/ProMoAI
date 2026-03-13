@@ -1,6 +1,7 @@
 import os
 import subprocess
 import tempfile
+from pathlib import Path
 
 import promoai
 import streamlit as st
@@ -23,7 +24,7 @@ def run_model_generator_app():
 
 def write_uploaded_file_to_staging(uploaded_file, suffix: str | None = None) -> str:
     staging_dir = get_staging_dir("promoai_uploads")
-    file_suffix = suffix or f".{uploaded_file.name.split('.')[-1].lower()}"
+    file_suffix = suffix or "".join(Path(uploaded_file.name).suffixes).lower() or ".bin"
     with tempfile.NamedTemporaryFile(
         mode="wb", delete=False, dir=staging_dir, suffix=file_suffix
     ) as temp_file:

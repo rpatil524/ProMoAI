@@ -114,12 +114,13 @@ def write_bytes_artifact(
     prefix: str | None = None,
 ) -> str:
     source_name = Path(filename)
+    full_suffix = "".join(source_name.suffixes) or ".bin"
     artifact_path = Path(
         create_managed_path(
             session_dir,
             category,
             description or source_name.stem or category,
-            source_name.suffix or ".bin",
+            full_suffix,
             prefix=prefix,
         )
     )
