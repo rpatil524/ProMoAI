@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from pathlib import Path
 
 from typing import Any, Callable, List, Optional, Tuple, TypeVar
 
@@ -222,6 +223,7 @@ def _persist_llm_request_trace(
     provider: str,
     llm_name: str,
     request_payload: dict[str, Any],
+    conversation_history: Optional[List[dict[str, Any]]] = None,
 ) -> str:
     payload = {
         "provider": provider,
@@ -242,6 +244,19 @@ def _persist_llm_request_trace(
         description=f"LLM request payload sent to {provider} ({llm_name}).",
         artifact_type="llm_request",
         extra={"provider": provider, "model": llm_name},
+    )
+    _write_trace_text_companion(
+        trace_session_dir,
+        category="llm_requests",
+        json_path=file_path,
+        artifact_type="llm_request_text",
+        description=f"Readable LLM request trace for {provider} ({llm_name}).",
+        content=_format_llm_request_text(
+            provider,
+            llm_name,
+            request_payload,
+            conversation_history=conversation_history,
+        ),
     )
     return file_path
 
@@ -279,7 +294,140 @@ def _persist_llm_response_trace(
         artifact_type="llm_response",
         extra={"provider": provider, "model": llm_name, "request_path": request_path},
     )
+    _write_trace_text_companion(
+        trace_session_dir,
+        category="llm_responses",
+        json_path=file_path,
+        artifact_type="llm_response_text",
+        description=f"Readable LLM response trace for {provider} ({llm_name}).",
+        content=_format_llm_response_text(
+            provider,
+            llm_name,
+            request_path=request_path,
+            response_payload=response_payload,
+            response_text=response_text,
+            error=error,
+        ),
+    )
     return file_path
+
+
+def _format_conversation_for_text(
+    conversation_history: Optional[List[dict[str, Any]]],
+) -> str:
+    if not conversation_history:
+        return "No conversation snapshot captured."
+
+    role_counts: dict[str, int] = {}
+    sections: list[str] = []
+    for message in conversation_history:
+        role = str(message.get("role", "unknown")).lower()
+        role_counts[role] = role_counts.get(role, 0) + 1
+        content = message.get("content", "")
+        content_text = (
+            content
+            if isinstance(content, str)
+            else json.dumps(
+                _sanitize_trace_value(_to_jsonable(content)),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        sections.append(
+            f"[{role.upper()} {role_counts[role]}]\n{_redact(str(content_text).strip())}"
+        )
+    return "\n\n".join(sections)
+
+
+def _format_json_block(value: Any) -> str:
+    return json.dumps(
+        _sanitize_trace_value(_to_jsonable(value)),
+        ensure_ascii=False,
+        indent=2,
+    )
+
+
+def _format_llm_request_text(
+    provider: str,
+    llm_name: str,
+    request_payload: dict[str, Any],
+    *,
+    conversation_history: Optional[List[dict[str, Any]]] = None,
+) -> str:
+    return (
+        f"Provider: {provider}\n"
+        f"Model: {llm_name}\n\n"
+        "Conversation\n"
+        "============\n"
+        f"{_format_conversation_for_text(conversation_history)}\n\n"
+        "Provider Payload\n"
+        "================\n"
+        f"{_format_json_block(request_payload)}\n"
+    )
+
+
+def _format_llm_response_text(
+    provider: str,
+    llm_name: str,
+    *,
+    request_path: str,
+    response_payload: Any = None,
+    response_text: Optional[str] = None,
+    error: Optional[str] = None,
+) -> str:
+    parts = [
+        f"Provider: {provider}",
+        f"Model: {llm_name}",
+        f"Request JSON: {request_path}",
+    ]
+    if response_text:
+        parts.extend(
+            [
+                "",
+                "Extracted Response Text",
+                "=======================",
+                _redact(response_text),
+            ]
+        )
+    if error:
+        parts.extend(
+            [
+                "",
+                "Error",
+                "=====",
+                _redact(error),
+            ]
+        )
+    parts.extend(
+        [
+            "",
+            "Raw Response JSON",
+            "=================",
+            _format_json_block(response_payload),
+        ]
+    )
+    return "\n".join(parts) + "\n"
+
+
+def _write_trace_text_companion(
+    trace_session_dir: str,
+    *,
+    category: str,
+    json_path: str,
+    artifact_type: str,
+    description: str,
+    content: str,
+) -> str:
+    text_path = Path(json_path).with_suffix(".txt")
+    text_path.write_text(content, encoding="utf-8")
+    append_manifest_entry(
+        trace_session_dir,
+        category=category,
+        file_path=str(text_path),
+        description=description,
+        artifact_type=artifact_type,
+    )
+    return str(text_path)
 
 
 def _raise_for_status(resp: requests.Response) -> None:
@@ -516,6 +664,7 @@ def generate_response_with_history(
         provider_name,
         llm_name,
         request_payload,
+        conversation_history=conversation_history,
     )
 
     try:
@@ -632,6 +781,7 @@ def generate_response_with_history_google(
             provider_name,
             google_model,
             request_payload,
+            conversation_history=conversation_history,
         )
         response = (
             client.models.generate_content(
@@ -747,6 +897,7 @@ def generate_response_with_history_anthropic(
             provider_name,
             llm_name,
             request_payload,
+            conversation_history=conversation,
         )
         message = client.messages.create(
             model=llm_name,
@@ -836,6 +987,7 @@ def generate_response_with_history_cohere(
         provider_name,
         llm_name,
         request_payload,
+        conversation_history=conversation,
     )
     try:
         client = cohere.ClientV2(api_key)
