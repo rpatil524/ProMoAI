@@ -1,2 +1,6 @@
+from pathlib import Path
+
+
 ENABLE_PRINTS = True
-temp_dir = "temp"
+project_root = Path(__file__).resolve().parents[2]
+temp_dir = str(project_root / "temp")

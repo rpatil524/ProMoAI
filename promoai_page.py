@@ -1,5 +1,4 @@
 import os
-import shutil
 import subprocess
 import tempfile
 
@@ -14,12 +13,22 @@ from pm4py.visualization.bpmn import visualizer as bpmn_visualizer
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from powl import convert_to_bpmn, import_event_log
 from powl.conversion.variants.to_petri_net import apply as convert_to_petri_net
+from promoai.general_utils.artifact_store import get_staging_dir
 from promoai.general_utils.app_utils import DISCOVERY_HELP, InputType, ViewType
-from promoai.general_utils.constants import temp_dir
 
 
 def run_model_generator_app():
     subprocess.run(["streamlit", "run", __file__])
+
+
+def write_uploaded_file_to_staging(uploaded_file, suffix: str | None = None) -> str:
+    staging_dir = get_staging_dir("promoai_uploads")
+    file_suffix = suffix or f".{uploaded_file.name.split('.')[-1].lower()}"
+    with tempfile.NamedTemporaryFile(
+        mode="wb", delete=False, dir=staging_dir, suffix=file_suffix
+    ) as temp_file:
+        temp_file.write(uploaded_file.read())
+        return temp_file.name
 
 
 def run_page():
@@ -88,15 +97,10 @@ def run_page():
                 if uploaded_log is None:
                     st.error(body="No file is selected!", icon="⚠️")
                     return
+                temp_path = None
                 try:
-                    contents = uploaded_log.read()
-                    os.makedirs(temp_dir, exist_ok=True)
-                    with tempfile.NamedTemporaryFile(
-                        mode="wb", delete=False, dir=temp_dir, suffix=uploaded_log.name
-                    ) as temp_file:
-                        temp_file.write(contents)
-                        log = import_event_log(temp_file.name)
-                    shutil.rmtree(temp_dir, ignore_errors=True)
+                    temp_path = write_uploaded_file_to_staging(uploaded_log)
+                    log = import_event_log(temp_path)
 
                     process_model = promoai.generate_model_from_event_log(
                         log, threshold
@@ -105,9 +109,11 @@ def run_page():
                     st.session_state["model_gen"] = process_model
                     st.session_state["feedback"] = []
                 except Exception as e:
-                    shutil.rmtree(temp_dir, ignore_errors=True)
                     st.error(body=f"Error during discovery: {e}", icon="⚠️")
                     return
+                finally:
+                    if temp_path and os.path.exists(temp_path):
+                        os.remove(temp_path)
         elif input_type == InputType.MODEL.value:
             uploaded_file = st.file_uploader(
                 "For **process model improvement**, upload a semi-block-structured BPMN or Petri net:",
@@ -119,34 +125,23 @@ def run_page():
                     st.error(body="No file is selected!", icon="⚠️")
                     return
                 else:
+                    temp_path = None
                     try:
                         file_extension = uploaded_file.name.split(".")[-1].lower()
 
                         if file_extension == "bpmn":
-                            contents = uploaded_file.read()
-
-                            os.makedirs(temp_dir, exist_ok=True)
-                            with tempfile.NamedTemporaryFile(
-                                mode="wb", delete=False, suffix=".bpmn", dir=temp_dir
-                            ) as temp_file:
-                                temp_file.write(contents)
-
-                            bpmn_graph = read_bpmn(temp_file.name)
+                            temp_path = write_uploaded_file_to_staging(
+                                uploaded_file, suffix=".bpmn"
+                            )
+                            bpmn_graph = read_bpmn(temp_path)
                             process_model = promoai.generate_model_from_bpmn(bpmn_graph)
-                            shutil.rmtree(temp_dir, ignore_errors=True)
 
                         elif file_extension == "pnml":
-                            contents = uploaded_file.read()
-
-                            os.makedirs(temp_dir, exist_ok=True)
-                            with tempfile.NamedTemporaryFile(
-                                mode="wb", delete=False, suffix=".pnml", dir=temp_dir
-                            ) as temp_file:
-                                temp_file.write(contents)
-                            pn, im, fm = read_pnml(temp_file.name)
+                            temp_path = write_uploaded_file_to_staging(
+                                uploaded_file, suffix=".pnml"
+                            )
+                            pn, im, fm = read_pnml(temp_path)
                             process_model = promoai.generate_model_from_petri_net(pn)
-
-                            shutil.rmtree(temp_dir, ignore_errors=True)
 
                         else:
                             st.error(
@@ -158,13 +153,14 @@ def run_page():
                         st.session_state["model_gen"] = process_model
                         st.session_state["feedback"] = []
                     except Exception as e:
-                        if os.path.exists(temp_dir):
-                            shutil.rmtree(temp_dir, ignore_errors=True)
                         st.error(
                             body=f"Please upload a semi-block-structured model! The error message: {e}",
                             icon="⚠️",
                         )
                         return
+                    finally:
+                        if temp_path and os.path.exists(temp_path):
+                            os.remove(temp_path)
 
     if "model_gen" in st.session_state and st.session_state["model_gen"]:
 

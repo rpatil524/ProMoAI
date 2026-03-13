@@ -165,4 +165,4 @@ def code_extraction_report(code_snippet: str, args, valid_artifact_ids: list, lo
                 f"The report references a dataframe artifact ({entry['content']}) that is too long to include in the report. Please summarize the dataframe instead of including it directly."
             )
 
-    return final_report, None
+    return code, final_report

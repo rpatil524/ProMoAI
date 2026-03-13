@@ -2,13 +2,23 @@ import copy
 from functools import partial
 from typing import Tuple
 
+import pandas as pd
+import pm4py
+
 from promoai.agents.pm4py_wrapper import PM4PYWrapper
 from promoai.agents.state import ProcessState
 from promoai.agents.utils import code_extraction_report
+from promoai.general_utils.artifact_store import (
+    append_manifest_entry,
+    create_managed_path,
+    write_json_artifact,
+    write_text_artifact,
+)
 from promoai.general_utils.llm_connection import (
     generate_result_with_error_handling,
     LLMConnection,
 )
+
 ERROR_MESSAGE_CODE_GENERATION_ENG = """
 Please update the model to fix the error. Make sure" \
                           f" to save the updated final event log is the variable 'final_event_log'. """
@@ -17,8 +27,69 @@ ERROR_MESSAGE_CODE_GENERATION_ANALYST = """
 Please update the model to fix the error. Make sure to save the final report in the variable 'final_report' as a list of dictionaries with keys 'type' and 'content', where 'type' can be either 'text' or 'artifact'. For artifacts, the content should be the key referencing the artifact (e.g., 'artifact_0') that you want to include in the report."""
 
 
-def init_state(user_request: str, event_log) -> ProcessState:
-    initial_state = ProcessState(user_request=user_request, event_log=event_log)
+def _persist_generated_code(
+    state: ProcessState, role: str, request_index: int, user_request: str, code: str
+) -> str:
+    file_path = write_text_artifact(
+        state["artifact_session_dir"],
+        "code",
+        f"{role}_step_{request_index}_{user_request}",
+        code,
+        suffix=".py",
+        prefix=role,
+    )
+    append_manifest_entry(
+        state["artifact_session_dir"],
+        category="code",
+        file_path=file_path,
+        description=f"{role.title()} generated code for request {request_index}.",
+        artifact_type="generated_code",
+        extra={"role": role, "request_index": request_index, "user_request": user_request},
+    )
+    return file_path
+
+
+def _persist_event_log_snapshot(
+    state: ProcessState, event_log, request_index: int, label: str
+) -> str | None:
+    try:
+        dataframe = (
+            event_log if isinstance(event_log, pd.DataFrame) else pm4py.convert_to_dataframe(event_log)
+        )
+    except Exception:
+        return None
+
+    file_path = create_managed_path(
+        state["artifact_session_dir"],
+        "event_logs",
+        f"request_{request_index}_{label}",
+        ".csv",
+        prefix="event_log",
+    )
+    dataframe.to_csv(file_path, index=False)
+    append_manifest_entry(
+        state["artifact_session_dir"],
+        category="event_logs",
+        file_path=file_path,
+        description=f"Event log snapshot after {label} for request {request_index}.",
+        artifact_type="event_log_snapshot",
+        extra={"rows": len(dataframe), "columns": list(dataframe.columns)},
+    )
+    return file_path
+
+
+def init_state(
+    user_request: str,
+    event_log,
+    artifact_session_dir: str | None = None,
+    source_log_path: str | None = None,
+) -> ProcessState:
+    initial_state = ProcessState(
+        user_request=user_request,
+        event_log=event_log,
+        artifact_session_dir=artifact_session_dir,
+        source_log_path=source_log_path,
+    )
     return initial_state
 
 
@@ -69,9 +140,14 @@ def engineer_node(
         additional_iterations=2,
         standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ENG
     )
+    request_index = len(state["user_request"])
+    _persist_generated_code(
+        state, "engineer", request_index, state["user_request"][-1], code
+    )
     state["event_log"] = result
     state["log_abstraction"] = state.generate_log_abstraction()
     state["messages_eng"] = messages
+    _persist_event_log_snapshot(state, result, request_index, "engineer_output")
     return state, result, code
 
 
@@ -235,7 +311,7 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
         code_extraction_report, valid_artifact_ids=valid_artifact_ids, long_dfs = long_dfs
     )
     try:
-        result, _, messages = generate_result_with_error_handling(
+        report_code, result, messages = generate_result_with_error_handling(
             msg_history,
             extraction_function=partial_function,
             llm_name=LLMCredentials.llm_name,
@@ -248,6 +324,13 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
         )
         state["sent_artifacts"].extend(
             list(artifact_id_to_description_and_content.keys())
+        )
+        _persist_generated_code(
+            state,
+            "analyst",
+            len(state["user_request"]),
+            state["user_request"][-1],
+            report_code,
         )
 
     except Exception as e:
@@ -264,5 +347,20 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
                 raise ValueError(f"Key {key} not found.")
     state["messages_ana"] = messages
     state["final_report"] = postprocessed_report
+    report_path = write_json_artifact(
+        state["artifact_session_dir"],
+        "reports",
+        f"assistant_report_request_{len(state['user_request'])}",
+        postprocessed_report,
+        prefix="report",
+    )
+    append_manifest_entry(
+        state["artifact_session_dir"],
+        category="reports",
+        file_path=report_path,
+        description=f"Structured analyst report for request {len(state['user_request'])}.",
+        artifact_type="report",
+        extra={"entries": len(postprocessed_report)},
+    )
     state.flush_context()
     return state

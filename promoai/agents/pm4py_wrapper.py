@@ -1,4 +1,3 @@
-import datetime
 import os
 import re
 from typing import Tuple
@@ -13,6 +12,10 @@ from powl import convert_to_petri_net
 import promoai.agents.utils as utils
 from promoai.agents.state import ProcessState
 from promoai.agents.utils import transform_dataframe_for_llms
+from promoai.general_utils.artifact_store import (
+    append_manifest_entry,
+    create_managed_path,
+)
 from promoai.model_generation.code_extraction import execute_code_and_get_variable
 
 
@@ -93,26 +96,28 @@ class PM4PYWrapper:
             raise ValueError(
                 "Description for the saved dataframe cannot be empty. Please provide a meaningful description to give context to the saved dataframe."
             )
-        id_ = len(self.state["saved_artifacts"]) + 1
-        file_name = f"dataframe_artifact_{id_}.csv"
-        root_dir = os.getcwd()
-        save_dir = os.path.join(root_dir, "temp", "dataframes")
-        # add timestamp to save_dir
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_dir = os.path.join(save_dir, timestamp)
-        os.makedirs(save_dir, exist_ok=True)
-        # add timestamp to filename
-        file_path = os.path.join(save_dir, file_name)
-        # Check if the filepath exists, if it does, raise an error
-        if os.path.exists(file_path):
-            raise FileExistsError(
-                f"The file {file_path} already exists. Please choose a different name to avoid overwriting."
-            )
+        data_preview = transform_dataframe_for_llms(df)
+        file_path = create_managed_path(
+            self.state["artifact_session_dir"],
+            "dataframes",
+            description,
+            ".csv",
+            prefix="dataframe",
+        )
         self.state.update_artifacts(
-            file_path, description, transform_dataframe_for_llms(df)
+            file_path, description, data_preview
         )
         self._add_context(f"Dataframe saved: {description}")
         df.to_csv(file_path, index=False)
+        append_manifest_entry(
+            self.state["artifact_session_dir"],
+            category="dataframes",
+            file_path=file_path,
+            description=description,
+            artifact_type="dataframe",
+            data_preview=data_preview,
+            extra={"rows": len(df), "columns": list(df.columns)},
+        )
 
     def save_visualization(self, fig, description: str, data):
         if description is None or description.strip() == "":
@@ -124,20 +129,13 @@ class PM4PYWrapper:
             if isinstance(data, pd.DataFrame)
             else data
         )
-        id_ = len(self.state["saved_artifacts"]) + 1
-        file_name = f"visual_artifact_{id_}.png"
-        file_name = self.__preprocess_pathway(file_name, "visualization")
-        root_dir = os.getcwd()
-        save_dir = os.path.join(root_dir, "temp", "visualizations")
-        # add timestamp to save_dir
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_dir = os.path.join(save_dir, timestamp)
-        os.makedirs(save_dir, exist_ok=True)
-        file_path = os.path.join(save_dir, file_name)
-        if os.path.exists(file_path):
-            raise FileExistsError(
-                f"The file {file_path} already exists. Please choose a different name to avoid overwriting."
-            )
+        file_path = create_managed_path(
+            self.state["artifact_session_dir"],
+            "visualizations",
+            description,
+            ".png",
+            prefix="visual",
+        )
         self.state.update_artifacts(file_path, description, data)
         self._add_context(f"Visualization generated: {description}")
         # Export the visualization to the specified file path
@@ -151,6 +149,14 @@ class PM4PYWrapper:
             fig.write_image(file_path)
         elif str(type(fig)).find('plotly.graph_objs') != -1:
             fig.write_image(file_path)
+        append_manifest_entry(
+            self.state["artifact_session_dir"],
+            category="visualizations",
+            file_path=file_path,
+            description=description,
+            artifact_type="visualization",
+            data_preview=data,
+        )
 
     def save_dfg(self):
         dfg, start_activities, end_activities = pm4py.discover_dfg(self.event_log)
