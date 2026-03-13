@@ -12,11 +12,16 @@ import requests
 from google import genai  # per colleague change
 
 from promoai.general_utils import constants
-
 from promoai.general_utils.ai_providers import AIProviders
+from promoai.general_utils.artifact_store import (
+    append_manifest_entry,
+    create_analysis_session,
+    write_json_artifact,
+)
 from promoai.prompting.prompt_engineering import ERROR_MESSAGE_FOR_MODEL_GENERATION
 
 T = TypeVar("T")
+INTERNAL_LLM_ARG_KEYS = {"artifact_session_dir"}
 
 # ----------------------------------------------------------------------------
 # LLM Connection Class
@@ -148,6 +153,135 @@ def _user_message(kind: str, extra: Optional[str] = None) -> str:
     return base
 
 
+def _split_llm_args(
+    llm_args: Optional[dict],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    if not llm_args:
+        return {}, {}
+
+    provider_args: dict[str, Any] = {}
+    internal_args: dict[str, Any] = {}
+    for key, value in llm_args.items():
+        if key in INTERNAL_LLM_ARG_KEYS:
+            internal_args[key] = value
+        else:
+            provider_args[key] = value
+    return provider_args, internal_args
+
+
+def _resolve_trace_session_dir(llm_args: Optional[dict]) -> str:
+    _, internal_args = _split_llm_args(llm_args)
+    return internal_args.get("artifact_session_dir") or create_analysis_session("llm")
+
+
+def _to_jsonable(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _to_jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_to_jsonable(item) for item in value]
+
+    for attr in ("model_dump", "to_dict", "dict"):
+        method = getattr(value, attr, None)
+        if callable(method):
+            try:
+                return _to_jsonable(method())
+            except Exception:
+                pass
+
+    for attr in ("model_dump_json", "to_json", "json"):
+        method = getattr(value, attr, None)
+        if callable(method):
+            try:
+                return _to_jsonable(json.loads(method()))
+            except Exception:
+                pass
+
+    if hasattr(value, "__dict__"):
+        try:
+            return _to_jsonable(vars(value))
+        except Exception:
+            pass
+
+    return str(value)
+
+
+def _sanitize_trace_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _redact(value)
+    if isinstance(value, dict):
+        return {str(key): _sanitize_trace_value(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_trace_value(item) for item in value]
+    return value
+
+
+def _persist_llm_request_trace(
+    trace_session_dir: str,
+    provider: str,
+    llm_name: str,
+    request_payload: dict[str, Any],
+) -> str:
+    payload = {
+        "provider": provider,
+        "model": llm_name,
+        "request": _sanitize_trace_value(_to_jsonable(request_payload)),
+    }
+    file_path = write_json_artifact(
+        trace_session_dir,
+        "llm_requests",
+        f"{provider}_{llm_name}_request",
+        payload,
+        prefix="llm_request",
+    )
+    append_manifest_entry(
+        trace_session_dir,
+        category="llm_requests",
+        file_path=file_path,
+        description=f"LLM request payload sent to {provider} ({llm_name}).",
+        artifact_type="llm_request",
+        extra={"provider": provider, "model": llm_name},
+    )
+    return file_path
+
+
+def _persist_llm_response_trace(
+    trace_session_dir: str,
+    provider: str,
+    llm_name: str,
+    *,
+    request_path: str,
+    response_payload: Any = None,
+    response_text: Optional[str] = None,
+    error: Optional[str] = None,
+) -> str:
+    payload = {
+        "provider": provider,
+        "model": llm_name,
+        "request_path": request_path,
+        "response": _sanitize_trace_value(_to_jsonable(response_payload)),
+        "response_text": _sanitize_trace_value(response_text),
+        "error": _sanitize_trace_value(error),
+    }
+    file_path = write_json_artifact(
+        trace_session_dir,
+        "llm_responses",
+        f"{provider}_{llm_name}_response",
+        payload,
+        prefix="llm_response",
+    )
+    append_manifest_entry(
+        trace_session_dir,
+        category="llm_responses",
+        file_path=file_path,
+        description=f"LLM response received from {provider} ({llm_name}).",
+        artifact_type="llm_response",
+        extra={"provider": provider, "model": llm_name, "request_path": request_path},
+    )
+    return file_path
+
+
 def _raise_for_status(resp: requests.Response) -> None:
     """Map HTTP errors to our typed exceptions with user-safe messages."""
     status = resp.status_code
@@ -214,12 +348,31 @@ def query_llm(
     ai_provider: str,
     llm_args: Optional[dict] = None,
 ) -> str:
+    trace_session_dir = _resolve_trace_session_dir(llm_args)
     if ai_provider == AIProviders.GOOGLE.value:
-        return generate_response_with_history_google(conversation, api_key, llm_name)
+        return generate_response_with_history_google(
+            conversation,
+            api_key,
+            llm_name,
+            trace_session_dir=trace_session_dir,
+            provider_name=ai_provider,
+        )
     elif ai_provider == AIProviders.ANTHROPIC.value:
-        return generate_response_with_history_anthropic(conversation, api_key, llm_name)
+        return generate_response_with_history_anthropic(
+            conversation,
+            api_key,
+            llm_name,
+            trace_session_dir=trace_session_dir,
+            provider_name=ai_provider,
+        )
     elif ai_provider == AIProviders.COHERE.value:
-        return generate_response_with_history_cohere(conversation, api_key, llm_name)
+        return generate_response_with_history_cohere(
+            conversation,
+            api_key,
+            llm_name,
+            trace_session_dir=trace_session_dir,
+            provider_name=ai_provider,
+        )
     else:
         use_responses_api_openai = False
         if ai_provider == AIProviders.DEEPINFRA.value:
@@ -244,9 +397,11 @@ def query_llm(
             conversation,
             api_key,
             llm_name,
+            ai_provider,
             api_url,
             use_responses_api=use_responses_api_openai,
             llm_args=llm_args,
+            trace_session_dir=trace_session_dir,
         )
 
 
@@ -261,9 +416,21 @@ def generate_result_with_error_handling(
     additional_iterations=5,
     standard_error_message=ERROR_MESSAGE_FOR_MODEL_GENERATION,
 ) -> tuple[str, any, list[Any]]:
+    provider_args, internal_args = _split_llm_args(llm_args)
+    trace_session_dir = internal_args.get("artifact_session_dir") or create_analysis_session(
+        "llm"
+    )
+    effective_llm_args = dict(provider_args)
+    effective_llm_args["artifact_session_dir"] = trace_session_dir
     error_history = []
     for iteration in range(max_iterations + additional_iterations):
-        response = query_llm(conversation, api_key, llm_name, ai_provider, llm_args)
+        response = query_llm(
+            conversation,
+            api_key,
+            llm_name,
+            ai_provider,
+            effective_llm_args,
+        )
         try:
             conversation.append({"role": "assistant", "content": response})
             auto_duplicate = iteration >= max_iterations
@@ -309,9 +476,11 @@ def generate_response_with_history(
     conversation_history: List[dict[str, str]],
     api_key: str,
     llm_name: str,
+    provider_name: str,
     api_url: str,
     use_responses_api: bool = False,
     llm_args: Optional[dict] = None,
+    trace_session_dir: Optional[str] = None,
 ) -> str:
     """
     Generates a response from the LLM using the conversation history.
@@ -322,11 +491,12 @@ def generate_response_with_history(
         {"role": m["role"], "content": m["content"]} for m in conversation_history
     ]
 
+    provider_args, _ = _split_llm_args(llm_args)
     payload = {"model": llm_name}
-    if llm_args:
+    if provider_args:
         if constants.ENABLE_PRINTS:
-            print(f"Using LLM args: {llm_args}")
-        payload.update(llm_args)
+            print(f"Using LLM args: {provider_args}")
+        payload.update(provider_args)
     if use_responses_api:
         payload["input"] = messages_payload
         endpoint = "/responses"
@@ -336,10 +506,39 @@ def generate_response_with_history(
 
     api_url = api_url.rstrip("/")
     url = f"{api_url}{endpoint}"
+    request_payload = {
+        "api_url": api_url,
+        "endpoint": endpoint,
+        "payload": payload,
+    }
+    request_path = _persist_llm_request_trace(
+        trace_session_dir or create_analysis_session("llm"),
+        provider_name,
+        llm_name,
+        request_payload,
+    )
 
-    data = _requests_post(url, headers=headers, json_=payload, timeout_s=(3.05, 120))
+    try:
+        data = _requests_post(url, headers=headers, json_=payload, timeout_s=(3.05, 120))
+    except Exception as e:
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_path=request_path,
+            error=str(e),
+        )
+        raise
 
     if isinstance(data, dict) and data.get("error"):
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_path=request_path,
+            response_payload=data,
+            error=str(data.get("error")),
+        )
         logger.warning(
             "Provider returned error object with 200: %s",
             _redact(str(data.get("error"))),
@@ -350,10 +549,27 @@ def generate_response_with_history(
 
     try:
         if use_responses_api:
-            return data["output"][-1]["content"][0]["text"]
+            response_text = data["output"][-1]["content"][0]["text"]
         else:
-            return data["choices"][0]["message"]["content"]
+            response_text = data["choices"][0]["message"]["content"]
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_path=request_path,
+            response_payload=data,
+            response_text=response_text,
+        )
+        return response_text
     except (KeyError, TypeError) as e:
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_path=request_path,
+            response_payload=data,
+            error=str(e),
+        )
         logger.warning("Unexpected schema from provider: %s", _redact(str(data))[:1000])
         raise UnexpectedResponseError(
             _user_message("unexpected"), retryable=True, details=str(e)
@@ -388,7 +604,12 @@ def generate_response_with_history_google(
     conversation_history: List[dict[str, str]],
     api_key: str,
     google_model: str,
+    *,
+    trace_session_dir: Optional[str] = None,
+    provider_name: str = AIProviders.GOOGLE.value,
 ) -> str:
+    request_payload: Optional[dict[str, Any]] = None
+    request_path: Optional[str] = None
     try:
         api_key = api_key.strip()
         if not api_key:
@@ -401,6 +622,17 @@ def generate_response_with_history_google(
         config = genai.types.GenerateContentConfig(
             system_instruction=system_instruction,
         )
+        request_payload = {
+            "model": google_model,
+            "contents": contents,
+            "config": {"system_instruction": system_instruction},
+        }
+        request_path = _persist_llm_request_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            google_model,
+            request_payload,
+        )
         response = (
             client.models.generate_content(
                 model=google_model, contents=contents, config=config
@@ -408,9 +640,10 @@ def generate_response_with_history_google(
             if system_instruction
             else client.models.generate_content(model=google_model, contents=contents)
         )
+        response_payload = _to_jsonable(response)
 
         try:
-            return response.text  # type: ignore[attr-defined]
+            response_text = response.text  # type: ignore[attr-defined]
         except Exception:
             if hasattr(response, "candidates") and response.candidates:
                 cand = response.candidates[0]
@@ -422,10 +655,45 @@ def generate_response_with_history_google(
                         if getattr(p, "text", "")
                     ]
                     if texts:
-                        return "\n".join(texts)
+                        response_text = "\n".join(texts)
+                        _persist_llm_response_trace(
+                            trace_session_dir or create_analysis_session("llm"),
+                            provider_name,
+                            google_model,
+                            request_path=request_path or "",
+                            response_payload=response_payload,
+                            response_text=response_text,
+                        )
+                        return response_text
+            _persist_llm_response_trace(
+                trace_session_dir or create_analysis_session("llm"),
+                provider_name,
+                google_model,
+                request_path=request_path or "",
+                response_payload=response_payload,
+                error="Unexpected Gemini response schema.",
+            )
             raise UnexpectedResponseError(_user_message("unexpected"), retryable=True)
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            google_model,
+            request_path=request_path or "",
+            response_payload=response_payload,
+            response_text=response_text,
+        )
+        return response_text
 
     except Exception as e:
+        if request_path and not isinstance(e, BaseLLMError):
+            _persist_llm_response_trace(
+                trace_session_dir or create_analysis_session("llm"),
+                provider_name,
+                google_model,
+                request_path=request_path,
+                response_payload={"request": request_payload},
+                error=str(e),
+            )
         text = str(e)
         lower = text.lower()
         if "api key" in lower or "permission" in lower or "unauthorized" in lower:
@@ -456,6 +724,9 @@ def generate_response_with_history_anthropic(
     conversation: List[dict[str, str]],
     api_key: str,
     llm_name: str,
+    *,
+    trace_session_dir: Optional[str] = None,
+    provider_name: str = AIProviders.ANTHROPIC.value,
 ) -> str:
     try:
         import anthropic
@@ -466,24 +737,76 @@ def generate_response_with_history_anthropic(
 
     try:
         client = anthropic.Anthropic(api_key=api_key)
+        request_payload = {
+            "model": llm_name,
+            "max_tokens": 8192,
+            "messages": conversation,
+        }
+        request_path = _persist_llm_request_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_payload,
+        )
         message = client.messages.create(
             model=llm_name,
             max_tokens=8192,
             messages=conversation,
         )
-        return message.content[0].text  # type: ignore[index]
+        response_text = message.content[0].text  # type: ignore[index]
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_path=request_path,
+            response_payload=_to_jsonable(message),
+            response_text=response_text,
+        )
+        return response_text
     except anthropic.RateLimitError as e:
+        if "request_path" in locals():
+            _persist_llm_response_trace(
+                trace_session_dir or create_analysis_session("llm"),
+                provider_name,
+                llm_name,
+                request_path=request_path,
+                error=str(e),
+            )
         raise RateLimitError(
             _user_message("rate_limit"), retryable=True, details=str(e)
         )
     except anthropic.AuthenticationError as e:
+        if "request_path" in locals():
+            _persist_llm_response_trace(
+                trace_session_dir or create_analysis_session("llm"),
+                provider_name,
+                llm_name,
+                request_path=request_path,
+                error=str(e),
+            )
         raise AuthError(_user_message("auth"), retryable=False, details=str(e))
     except anthropic.APIStatusError as e:
+        if "request_path" in locals():
+            _persist_llm_response_trace(
+                trace_session_dir or create_analysis_session("llm"),
+                provider_name,
+                llm_name,
+                request_path=request_path,
+                error=str(e),
+            )
         logger.warning("Anthropic APIStatusError: %s", _redact(str(e)))
         raise ServiceUnavailableError(
             _user_message("unavailable"), retryable=True, details=str(e)
         )
     except Exception as e:
+        if "request_path" in locals():
+            _persist_llm_response_trace(
+                trace_session_dir or create_analysis_session("llm"),
+                provider_name,
+                llm_name,
+                request_path=request_path,
+                error=str(e),
+            )
         text = str(e)
         if "timeout" in text.lower():
             raise TimeoutError(_user_message("timeout"), retryable=True, details=text)
@@ -500,11 +823,31 @@ def generate_response_with_history_cohere(
     conversation: List[dict[str, str]],
     api_key: str,
     llm_name: str,
+    *,
+    trace_session_dir: Optional[str] = None,
+    provider_name: str = AIProviders.COHERE.value,
 ) -> str:
+    request_payload = {
+        "model": llm_name,
+        "messages": conversation,
+    }
+    request_path = _persist_llm_request_trace(
+        trace_session_dir or create_analysis_session("llm"),
+        provider_name,
+        llm_name,
+        request_payload,
+    )
     try:
         client = cohere.ClientV2(api_key)
         response = client.chat(model=llm_name, messages=conversation)
     except Exception as e:
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_path=request_path,
+            error=str(e),
+        )
         text = str(e)
         lower = text.lower()
         if "invalid api key" in lower or "unauthorized" in lower:
@@ -521,8 +864,25 @@ def generate_response_with_history_cohere(
         )
 
     try:
-        return response.message.content[0].text  # type: ignore[attr-defined,index]
+        response_text = response.message.content[0].text  # type: ignore[attr-defined,index]
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_path=request_path,
+            response_payload=_to_jsonable(response),
+            response_text=response_text,
+        )
+        return response_text
     except Exception as e:
+        _persist_llm_response_trace(
+            trace_session_dir or create_analysis_session("llm"),
+            provider_name,
+            llm_name,
+            request_path=request_path,
+            response_payload=_to_jsonable(response),
+            error=str(e),
+        )
         logger.warning(
             "Unexpected schema from Cohere: %s", _redact(str(response))[:1000]
         )

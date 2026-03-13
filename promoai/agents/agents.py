@@ -129,13 +129,15 @@ def engineer_node(
         else state["messages_eng"]
         + [{"role": "user", "content": state["user_request"][-1]}]
     )
+    effective_llm_args = dict(LLMCredentials.args or {})
+    effective_llm_args["artifact_session_dir"] = state["artifact_session_dir"]
     code, result, messages = generate_result_with_error_handling(
         msg_history,
         extraction_function=api.code_extraction,
         llm_name=LLMCredentials.llm_name,
         ai_provider=LLMCredentials.ai_provider,
         api_key=LLMCredentials.api_key,
-        llm_args=LLMCredentials.args,
+        llm_args=effective_llm_args,
         max_iterations=3,
         additional_iterations=2,
         standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ENG
@@ -311,13 +313,15 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
         code_extraction_report, valid_artifact_ids=valid_artifact_ids, long_dfs = long_dfs
     )
     try:
+        effective_llm_args = dict(LLMCredentials.args or {})
+        effective_llm_args["artifact_session_dir"] = state["artifact_session_dir"]
         report_code, result, messages = generate_result_with_error_handling(
             msg_history,
             extraction_function=partial_function,
             llm_name=LLMCredentials.llm_name,
             ai_provider=LLMCredentials.ai_provider,
             api_key=LLMCredentials.api_key,
-            llm_args=LLMCredentials.args,
+            llm_args=effective_llm_args,
             max_iterations=3,
             additional_iterations=2,
             standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ANALYST
