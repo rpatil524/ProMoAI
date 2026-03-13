@@ -257,5 +257,5 @@ def run_page():
         except Exception as e:
             st.error(icon="⚠️", body=str(e))
 
-if __name__ == "__main__":
+if __name__ in {"__main__", "__page__"}:
     run_page()

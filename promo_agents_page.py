@@ -262,8 +262,6 @@ def run_page():
         chat(st.session_state["llm_credentials"])
 
 
-if __name__ == "__main__":
+if __name__ in {"__main__", "__page__"}:
     os.environ["MPLBACKEND"] = "Agg"
-
-    st.set_page_config(page_title="PMAx", page_icon="🤖")
     run_page()
