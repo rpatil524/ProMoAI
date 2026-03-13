@@ -171,7 +171,7 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
 
                     # Logic for Images vs Dataframes
                     if b_val.lower().endswith((".png", ".jpg", ".jpeg", ".svg")):
-                        st.image(b_val, use_container_width=True)
+                        st.image(b_val, use_column_width=True)
                     elif b_val.lower().endswith(".csv"):
                         df = pd.read_csv(b_val)
                         # show only the first 30 rows
