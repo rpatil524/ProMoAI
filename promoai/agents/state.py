@@ -2,6 +2,11 @@ from typing import Any, Dict, List, Tuple
 
 from pm4py.objects.log.obj import EventLog
 
+from promoai.general_utils.artifact_store import (
+    append_manifest_entry,
+    create_analysis_session,
+)
+
 
 class ProcessState(dict):
     user_request: List[str]
@@ -34,7 +39,16 @@ class ProcessState(dict):
     # To keep track of sent artifacts to the analyst so we spare tokens
     sent_artifacts: List[str]
 
-    def __init__(self, user_request: str, event_log: EventLog):
+    artifact_session_dir: str
+    source_log_path: str | None
+
+    def __init__(
+        self,
+        user_request: str,
+        event_log: EventLog,
+        artifact_session_dir: str | None = None,
+        source_log_path: str | None = None,
+    ):
         super().__init__()
         self["user_request"] = [user_request]
         if event_log is None:
@@ -42,6 +56,10 @@ class ProcessState(dict):
                 "Event log cannot be None. Please provide a valid event log to initialize the ProcessState."
             )
         self["event_log"] = event_log
+        self["artifact_session_dir"] = artifact_session_dir or create_analysis_session(
+            "pmax"
+        )
+        self["source_log_path"] = source_log_path
         self["log_abstraction"] = self.generate_log_abstraction()
         self["discovered_model"] = None
         self["saved_artifacts"] = {}
@@ -54,6 +72,14 @@ class ProcessState(dict):
         self["extracted_statistics"] = {}
         self["analysis_data"] = {}
         self["sent_artifacts"] = []
+        append_manifest_entry(
+            self["artifact_session_dir"],
+            category="session",
+            file_path=self["artifact_session_dir"],
+            description="Initialized PMAx analysis session.",
+            artifact_type="session",
+            extra={"source_log_path": source_log_path},
+        )
 
     def __str__(self):
         return (

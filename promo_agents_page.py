@@ -1,27 +1,96 @@
 import os
-
-import shutil
-import tempfile
+from io import BytesIO
 from typing import Dict, List, Union
 
+import markdown
 import pandas as pd
+import pm4py
 import streamlit as st
 from powl import import_event_log
+from xhtml2pdf import pisa
+
 from promoai.agents.agents import analyst_node, engineer_node, init_state
 from promoai.general_utils.app_utils import DISCOVERY_HELP
-
+from promoai.general_utils.artifact_store import (
+    append_manifest_entry,
+    create_analysis_session,
+    create_managed_path,
+    write_bytes_artifact,
+    write_text_artifact,
+)
 from promoai.general_utils.llm_connection import LLMConnection
-from promoai.general_utils.constants import temp_dir
 
-from xhtml2pdf import pisa
-from io import BytesIO
-import base64
-import base64
-import os
-import pandas as pd
-from io import BytesIO
-from xhtml2pdf import pisa
-import markdown
+
+def get_active_artifact_session_dir() -> str | None:
+    agent_state = st.session_state.get("agent_state")
+    if agent_state and agent_state.get("artifact_session_dir"):
+        return agent_state["artifact_session_dir"]
+    return st.session_state.get("artifact_session_dir")
+
+
+def persist_uploaded_event_log(uploaded_file) -> tuple[str, str, pd.DataFrame]:
+    artifact_session_dir = create_analysis_session("pmax")
+    file_bytes = uploaded_file.read()
+    raw_log_path = write_bytes_artifact(
+        artifact_session_dir,
+        "inputs",
+        uploaded_file.name,
+        file_bytes,
+        description=f"uploaded_{uploaded_file.name}",
+        prefix="event_log_raw",
+    )
+    append_manifest_entry(
+        artifact_session_dir,
+        category="inputs",
+        file_path=raw_log_path,
+        description="Uploaded event log file.",
+        artifact_type="uploaded_event_log",
+        extra={"original_name": uploaded_file.name, "size_bytes": len(file_bytes)},
+    )
+
+    log = import_event_log(raw_log_path)
+    normalized_log = log if isinstance(log, pd.DataFrame) else pm4py.convert_to_dataframe(log)
+    normalized_log_path = create_managed_path(
+        artifact_session_dir,
+        "event_logs",
+        "uploaded_event_log_normalized",
+        ".csv",
+        prefix="event_log",
+    )
+    normalized_log.to_csv(normalized_log_path, index=False)
+    append_manifest_entry(
+        artifact_session_dir,
+        category="event_logs",
+        file_path=normalized_log_path,
+        description="Normalized event log snapshot right after import.",
+        artifact_type="event_log_snapshot",
+        extra={"rows": len(normalized_log), "columns": list(normalized_log.columns)},
+    )
+    return artifact_session_dir, raw_log_path, normalized_log
+
+
+def persist_pdf_report(pdf_bytes: bytes) -> str | None:
+    artifact_session_dir = get_active_artifact_session_dir()
+    if not artifact_session_dir:
+        return None
+
+    pdf_path = write_bytes_artifact(
+        artifact_session_dir,
+        "reports",
+        "pmax_analysis_report.pdf",
+        pdf_bytes,
+        description="pmax_analysis_report",
+        prefix="pdf_report",
+    )
+    append_manifest_entry(
+        artifact_session_dir,
+        category="reports",
+        file_path=pdf_path,
+        description="PDF export of the PMAx chat report.",
+        artifact_type="pdf_report",
+        extra={"size_bytes": len(pdf_bytes)},
+    )
+    return pdf_path
 
 def export_messages_to_pdf(messages) -> bytes:
     html_content = f"""
@@ -102,7 +171,7 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
 
                     # Logic for Images vs Dataframes
                     if b_val.lower().endswith((".png", ".jpg", ".jpeg", ".svg")):
-                        st.image(b_val, use_container_width=True)
+                        st.image(b_val, use_column_width=True)
                     elif b_val.lower().endswith(".csv"):
                         df = pd.read_csv(b_val)
                         # show only the first 30 rows
@@ -126,13 +195,33 @@ def chat(llm_credentials: LLMConnection):
         display_chat_message(message["role"], message["content"])
 
     if prompt := st.chat_input("Enter your message here..."):
+        artifact_session_dir = get_active_artifact_session_dir()
+        if artifact_session_dir:
+            prompt_path = write_text_artifact(
+                artifact_session_dir,
+                "requests",
+                f"user_request_{len(st.session_state.messages)}",
+                prompt,
+                suffix=".md",
+                prefix="request",
+            )
+            append_manifest_entry(
+                artifact_session_dir,
+                category="requests",
+                file_path=prompt_path,
+                description="User request submitted to PMAx.",
+                artifact_type="user_request",
+            )
         display_chat_message("user", prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         # Add user message to chat history
         if "agent_state" not in st.session_state:
             st.session_state.agent_state = init_state(
-                user_request=prompt, event_log=st.session_state["uploaded_log"]
+                user_request=prompt,
+                event_log=st.session_state["uploaded_log"],
+                artifact_session_dir=artifact_session_dir,
+                source_log_path=st.session_state.get("uploaded_log_path"),
             )
         else:
             # Add the user request to the agent state
@@ -173,20 +262,27 @@ def run_page():
         st.session_state["messages"] = [
             {"role": "assistant", "content": "Hey! I am PMAx. How can I help you today?"}
         ]
-    
-
-    os.makedirs(temp_dir, exist_ok=True)
 
     if "setup_complete" not in st.session_state:
         st.session_state["setup_complete"] = False
+
+    artifact_session_dir = get_active_artifact_session_dir()
+    if artifact_session_dir:
+        st.sidebar.caption("Artifact folder")
+        st.sidebar.code(artifact_session_dir, language=None)
+        st.sidebar.caption("The manifest is stored as `manifest.jsonl` inside this folder.")
 
     if st.session_state["setup_complete"]:
         if st.sidebar.button("🔄 Reset History"):
             st.session_state["setup_complete"] = False
             if "uploaded_log" in st.session_state:
                 del st.session_state["uploaded_log"]
+            if "uploaded_log_path" in st.session_state:
+                del st.session_state["uploaded_log_path"]
             if "agent_state" in st.session_state:
                 del st.session_state["agent_state"]
+            if "artifact_session_dir" in st.session_state:
+                del st.session_state["artifact_session_dir"]
             if "messages" in st.session_state:
                 del st.session_state["messages"]
             st.rerun()
@@ -196,7 +292,10 @@ def run_page():
                 with st.spinner("Converting chat and artifacts to PDF..."):
                     pdf_bytes = export_messages_to_pdf(st.session_state.messages)
                     if pdf_bytes:
+                        pdf_path = persist_pdf_report(pdf_bytes)
                         st.sidebar.success("Successfully built PDF report!")
+                        if pdf_path:
+                            st.sidebar.caption(f"Saved to: `{pdf_path}`")
                     else:
                         st.sidebar.error("Error: Failed to generate PDF report.")
             else:
@@ -231,24 +330,16 @@ def run_page():
                     return
                 try:
                     with st.spinner("Uploading and processing the event log..."):
-                        contents = uploaded_log.read()
-                        os.makedirs(temp_dir, exist_ok=True)
-                        with tempfile.NamedTemporaryFile(
-                            mode="wb",
-                            delete=False,
-                            dir=temp_dir,
-                            suffix=uploaded_log.name,
-                        ) as temp_file:
-                            temp_file.write(contents)
-                            log = import_event_log(temp_file.name)
-                            if "uploaded_log" not in st.session_state:
-                                st.session_state["uploaded_log"] = log
-                                st.session_state["setup_complete"] = True
-
-                                st.rerun()
-                        shutil.rmtree(temp_dir, ignore_errors=True)
+                        artifact_session_dir, raw_log_path, log = persist_uploaded_event_log(
+                            uploaded_log
+                        )
+                        if "uploaded_log" not in st.session_state:
+                            st.session_state["uploaded_log"] = log
+                            st.session_state["uploaded_log_path"] = raw_log_path
+                            st.session_state["artifact_session_dir"] = artifact_session_dir
+                            st.session_state["setup_complete"] = True
+                            st.rerun()
                 except Exception as e:
-                    shutil.rmtree(temp_dir, ignore_errors=True)
                     st.error(body=f"Error : {e}", icon="⚠️")
                     return
 
@@ -262,8 +353,6 @@ def run_page():
         chat(st.session_state["llm_credentials"])
 
 
-if __name__ == "__main__":
+if __name__ in {"__main__", "__page__"}:
     os.environ["MPLBACKEND"] = "Agg"
-
-    st.set_page_config(page_title="PMAx", page_icon="🤖")
     run_page()

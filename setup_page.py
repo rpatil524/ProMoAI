@@ -64,6 +64,6 @@ def run_page():
     st.caption(
         "ProMoAI is developed at the Fraunhofer Institute for Applied Information Technology FIT. "
     )
-if __name__ == "__main__":
+if __name__ in {"__main__", "__page__"}:
     run_page()
 

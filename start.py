@@ -1,8 +1,23 @@
+import subprocess
+import sys
+from pathlib import Path
+
 import streamlit as st
+from streamlit.runtime.scriptrunner import get_script_run_ctx
+
+
+def _launch_via_streamlit() -> None:
+    script_path = Path(__file__).resolve()
+    result = subprocess.run(
+        [sys.executable, "-m", "streamlit", "run", str(script_path)],
+        check=False,
+    )
+    raise SystemExit(result.returncode)
+
 
 def run_app():
     pg = st.navigation([
-        st.Page("setup_page.py", title="Setup", icon="⚙️"),
+        st.Page("setup_page.py", title="Setup", icon="⚙️", default=True),
         st.Page("promoai_page.py", title="ProMoAI", icon="🤖"),
         st.Page("promo_agents_page.py", title="ProMoAgents", icon="🕵🏻"),
     ])
@@ -69,5 +84,9 @@ def footer():
 
 
 if __name__ == "__main__":
+    # Streamlit pages require a script run context; plain `python start.py`
+    # does not provide one, so we relaunch through the Streamlit CLI.
+    if get_script_run_ctx() is None:
+        _launch_via_streamlit()
     st.set_page_config(page_title="ProMoAI", page_icon="🤖")
     run_app()
