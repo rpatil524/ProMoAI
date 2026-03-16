@@ -52,18 +52,18 @@ def run_page():
                     ai_provider=provider
                 )
                 st.success("Credentials saved! You can now navigate to ProMoAI or PMAx.")
-    st.markdown("<br>", unsafe_allow_html=True) # Adds some breathing room
-    st.divider()
-    
-    # Single line: Name [Email Icon] [LinkedIn Icon]
-    st.caption(
-        "Humam Kourani [✉️](mailto:humam.kourani@fit.fraunhofer.de) [🔗](https://www.linkedin.com/in/humam-kourani-98b342232) • "
-        "Alessandro Berti [✉️](mailto:a.berti@pads.rwth-aachen.de) [🔗](https://www.linkedin.com/in/dr-alessandro-berti-2a483766) • "
-        "Anton Antonov [✉️](mailto:anton.antonov@fit.fraunhofer.de) [🔗](https://www.linkedin.com/in/anton-antonov-5448291a6) • "
-    )
-    st.caption(
-        "ProMoAI is developed at the Fraunhofer Institute for Applied Information Technology FIT. "
-    )
+    # st.markdown("<br>", unsafe_allow_html=True) # Adds some breathing room
+    # st.divider()
+    #
+    # # Single line: Name [Email Icon] [LinkedIn Icon]
+    # st.caption(
+    #     "Humam Kourani [✉️](mailto:humam.kourani@fit.fraunhofer.de) [🔗](https://www.linkedin.com/in/humam-kourani-98b342232) • "
+    #     "Alessandro Berti [✉️](mailto:a.berti@pads.rwth-aachen.de) [🔗](https://www.linkedin.com/in/dr-alessandro-berti-2a483766) • "
+    #     "Anton Antonov [✉️](mailto:anton.antonov@fit.fraunhofer.de) [🔗](https://www.linkedin.com/in/anton-antonov-5448291a6) • "
+    # )
+    # st.caption(
+    #     "ProMoAI is developed at the Fraunhofer Institute for Applied Information Technology FIT. "
+    # )
 if __name__ in {"__main__", "__page__"}:
     run_page()
 
