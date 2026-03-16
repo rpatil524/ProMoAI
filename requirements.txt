@@ -1,9 +1,15 @@
-powl>=2.1.2
+powl>=2.3.3
 pm4py
 setuptools
 streamlit
 requests
-google-generativeai
+google-genai
 anthropic
 rustxes
+tabulate
+seaborn
+matplotlib
+xhtml2pdf
+plotly
+pillow
 cohere

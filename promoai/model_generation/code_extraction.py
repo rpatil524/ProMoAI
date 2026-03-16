@@ -1,5 +1,7 @@
+import ast
 import re
 import traceback
+from typing import Dict, Optional
 
 
 def extract_final_python_code(response_text):
@@ -42,9 +44,11 @@ def extract_final_python_code(response_text):
         raise Exception("No Python code snippet found!")
 
 
-def execute_code_and_get_variable(code, variable_name):
+def execute_code_and_get_variable(
+    code, variable_name, namespace: Optional[Dict] = None
+):
     try:
-        local_vars = {}
+        local_vars = (namespace or {}).copy()
         exec(code, globals(), local_vars)
         try:
             value = local_vars[variable_name]
@@ -77,50 +81,68 @@ def execute_code_and_get_variable(code, variable_name):
 
         raise Exception(error_details)
 
+
 def extract_resources_from_code(code):
-    activity_pattern = re.compile(r"""
-        gen\.activity\(
-        \s*\"(?P<activity>[^\"]+)\" 
-        
-        # Start an optional non-capturing group for the pool and lane arguments.
-        (?: 
-            ,\s* # Arguments must be preceded by a comma and optional whitespace
-            
-            # Group the two main patterns together
-            (?:
-                # Pattern 1: Positional arguments (e.g., Hospital, Nurse)
-                (?P<pool_pos>[A-Z_]+)\s*,\s*(?P<lane_pos>[A-Z_]+)
-                |
-                # Pattern 2: Keyword arguments (e.g., pool="Bank", lane=None)
-                pool\s*=\s*(?P<pool_kw>\"[^\"]+\"|None)\s*,\s*
-                lane\s*=\s*(?P<lane_kw>\"[^\"]+\"|None)
-            )
-        )? # The '?' makes the entire pool/lane section optional
-        \s*\) # Match the closing parenthesis
-    """, re.VERBOSE)
+    """
+    Extract gen.activity calls with their pool and lane.
 
+    Returns:
+        dict: activity_name -> (pool, lane)
+    """
+    tree = ast.parse(code)
     resources = {}
-    
-    def _process_kw_arg(value):
-        if value is None or value == 'None':
-            return None
-        return value.strip('"')
+    variables = {}
 
-    for match in activity_pattern.finditer(code):
-        activity = match.group('activity')
-        
-        if match.group('pool_pos') is not None:
-            # Matched positional variables (Pattern 1)
-            pool = match.group('pool_pos')
-            lane = match.group('lane_pos')
-        elif match.group('pool_kw') is not None:
-            # Matched keyword arguments (Pattern 2)
-            pool = _process_kw_arg(match.group('pool_kw'))
-            lane = _process_kw_arg(match.group('lane_kw'))
-        else:
-            # Only the activity name was provided
-            pool, lane = None, None
-            
-        resources[activity] = (pool, lane)
-        
+    class ActivityVisitor(ast.NodeVisitor):
+        def visit_Assign(self, node):
+            # var = "value" or var = None
+            if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                var_name = node.targets[0].id
+                variables[var_name] = self.resolve_value(node.value)
+
+            if isinstance(node.value, ast.Call):
+                self.process_call(node.value)
+
+            self.generic_visit(node)
+
+        def visit_Expr(self, node):
+            # Standalone expressions like: gen.activity("A", ...)
+            if isinstance(node.value, ast.Call):
+                self.process_call(node.value)
+            self.generic_visit(node)
+
+        def process_call(self, call):
+            func = call.func
+            if isinstance(func, ast.Attribute) and func.attr == "activity":
+                # Activity name
+                activity_name = None
+                if len(call.args) >= 1:
+                    activity_name = self.resolve_value(call.args[0])
+                if activity_name is None:
+                    return
+                # Positional args (if any)
+                pool_val = None
+                lane_val = None
+                if len(call.args) >= 2:
+                    pool_val = self.resolve_value(call.args[1])
+                if len(call.args) >= 3:
+                    lane_val = self.resolve_value(call.args[2])
+
+                # Override with keyword args if these are provided
+                for kw in call.keywords:
+                    if kw.arg == "pool":
+                        pool_val = self.resolve_value(kw.value)
+                    elif kw.arg == "lane":
+                        lane_val = self.resolve_value(kw.value)
+
+                resources[activity_name] = (pool_val, lane_val)
+
+        def resolve_value(self, node):
+            if isinstance(node, ast.Constant):
+                return node.value
+            elif isinstance(node, ast.Name):
+                return variables.get(node.id, None)
+            return None
+
+    ActivityVisitor().visit(tree)
     return resources

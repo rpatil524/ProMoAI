@@ -7,9 +7,9 @@ import re
 from typing import Any, Callable, List, Optional, Tuple, TypeVar
 
 import cohere  # per colleague change
-import google.generativeai as genai  # per colleague change
 
 import requests
+from google import genai  # per colleague change
 
 from promoai.general_utils import constants
 
@@ -17,6 +17,26 @@ from promoai.general_utils.ai_providers import AIProviders
 from promoai.prompting.prompt_engineering import ERROR_MESSAGE_FOR_MODEL_GENERATION
 
 T = TypeVar("T")
+
+# ----------------------------------------------------------------------------
+# LLM Connection Class
+# ----------------------------------------------------------------------------
+class LLMConnection:
+    def __init__(
+        self, api_key: str, llm_name: str, ai_provider: str, args: Optional[dict] = None
+    ):
+        self.api_key = api_key
+        self.llm_name = llm_name
+        self.ai_provider = ai_provider
+        self.args = args
+
+    def __repr__(self):
+        # To avoid injection attacks
+        return f"LLMConnection(api_key=HIDDEN, llm_name={self.llm_name}, ai_provider={self.ai_provider}, args={self.args})"
+
+    def __str__(self):
+        return self.__repr__()
+
 
 # -----------------------------------------------------------------------------
 # Logging
@@ -192,6 +212,7 @@ def query_llm(
     api_key: str,
     llm_name: str,
     ai_provider: str,
+    llm_args: Optional[dict] = None,
 ) -> str:
     if ai_provider == AIProviders.GOOGLE.value:
         return generate_response_with_history_google(conversation, api_key, llm_name)
@@ -225,6 +246,7 @@ def query_llm(
             llm_name,
             api_url,
             use_responses_api=use_responses_api_openai,
+            llm_args=llm_args,
         )
 
 
@@ -234,13 +256,14 @@ def generate_result_with_error_handling(
     api_key: str,
     llm_name: str,
     ai_provider: str,
+    llm_args: Optional[dict] = None,
     max_iterations=5,
     additional_iterations=5,
     standard_error_message=ERROR_MESSAGE_FOR_MODEL_GENERATION,
 ) -> tuple[str, any, list[Any]]:
     error_history = []
     for iteration in range(max_iterations + additional_iterations):
-        response = query_llm(conversation, api_key, llm_name, ai_provider)
+        response = query_llm(conversation, api_key, llm_name, ai_provider, llm_args)
         try:
             conversation.append({"role": "assistant", "content": response})
             auto_duplicate = iteration >= max_iterations
@@ -258,7 +281,9 @@ def generate_result_with_error_handling(
                 + "This is the error"
                 f" message: {error_description}"
             )
-            conversation.append({"role": "user", "content": new_message, "type": "error"})
+            conversation.append(
+                {"role": "user", "content": new_message, "type": "error"}
+            )
 
     raise Exception(
         llm_name
@@ -286,20 +311,22 @@ def generate_response_with_history(
     llm_name: str,
     api_url: str,
     use_responses_api: bool = False,
+    llm_args: Optional[dict] = None,
 ) -> str:
     """
     Generates a response from the LLM using the conversation history.
     """
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}",
-    }
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
 
     messages_payload = [
         {"role": m["role"], "content": m["content"]} for m in conversation_history
     ]
 
     payload = {"model": llm_name}
+    if llm_args:
+        if constants.ENABLE_PRINTS:
+            print(f"Using LLM args: {llm_args}")
+        payload.update(llm_args)
     if use_responses_api:
         payload["input"] = messages_payload
         endpoint = "/responses"
@@ -310,7 +337,7 @@ def generate_response_with_history(
     api_url = api_url.rstrip("/")
     url = f"{api_url}{endpoint}"
 
-    data = _requests_post(url, headers=headers, json_=payload, timeout_s=(3.05, 60))
+    data = _requests_post(url, headers=headers, json_=payload, timeout_s=(3.05, 120))
 
     if isinstance(data, dict) and data.get("error"):
         logger.warning(
@@ -367,19 +394,20 @@ def generate_response_with_history_google(
         if not api_key:
             raise Exception("api key not provided")
 
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         system_instruction, contents = _to_gemini_contents_and_system(
             conversation_history
         )
-
-        if system_instruction:
-            model = genai.GenerativeModel(
-                model_name=google_model, system_instruction=system_instruction
+        config = genai.types.GenerateContentConfig(
+            system_instruction=system_instruction,
+        )
+        response = (
+            client.models.generate_content(
+                model=google_model, contents=contents, config=config
             )
-        else:
-            model = genai.GenerativeModel(model_name=google_model)
-
-        response = model.generate_content(contents)
+            if system_instruction
+            else client.models.generate_content(model=google_model, contents=contents)
+        )
 
         try:
             return response.text  # type: ignore[attr-defined]
