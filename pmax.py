@@ -241,9 +241,13 @@ def chat(llm_credentials: LLMConnection):
                 state="running",
                 expanded=True,
             )
-            st.session_state.agent_state, _, code = engineer_node(
-                st.session_state.agent_state, llm_credentials
-            )
+            try:
+                st.session_state.agent_state, _, code = engineer_node(
+                    st.session_state.agent_state, llm_credentials
+                )
+            except Exception as e:
+                st.error(f"Error during calling the Engineer: {e}")
+                return
             st.write("Code generated! Executing the code and generating the report...")
             st.write(f"Executing the following code:\n```python\n{code}\n```")
             # Add the generated code to the status
@@ -251,7 +255,11 @@ def chat(llm_credentials: LLMConnection):
                 label="The analyst is generating the report based on the generated code and the analysis artifacts...",
                 state="running",
             )
-            updated_state = analyst_node(st.session_state.agent_state, llm_credentials)
+            try:
+                updated_state = analyst_node(st.session_state.agent_state, llm_credentials)
+            except Exception as e:
+                st.error(f"Error during calling the Analyst: {e}")
+                return
             st.session_state.agent_state = updated_state
             status.update(label="Report Generated! ✅", state="complete", expanded=False)
 
