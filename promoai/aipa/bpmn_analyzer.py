@@ -3,6 +3,7 @@ from promoai.aipa.conversation import (
     create_message,
     create_process_model_representation,
 )
+from promoai.general_utils.artifact_store import create_analysis_session
 from promoai.general_utils.llm_connection import query_llm
 
 
@@ -30,6 +31,7 @@ class BPMNAnalyzer:
         self.api_key = api_key
         self.ai_model = ai_model
         self.ai_provider = ai_provider
+        self.llm_args = {"artifact_session_dir": create_analysis_session("bpmn_query")}
         self.model_abstraction = model_abstraction
         self._conversation = create_conversation(
             role="system",
@@ -78,6 +80,7 @@ class BPMNAnalyzer:
             api_key=self.api_key,
             llm_name=self.ai_model,
             ai_provider=self.ai_provider,
+            llm_args=self.llm_args,
         )
         
         self._conversation.append(user_message)
