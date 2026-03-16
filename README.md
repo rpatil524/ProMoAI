@@ -1,19 +1,84 @@
-# ProMoAI
-ProMoAI leverages Large Language Models for the automatic generation of process models. ProMoAI transforms textual descriptions of processes into process models that can be exported in the BPMN and PNML formats. It also supports user interaction by providing feedback on the generated model to refine it. ProMoAI supports three input types:
-* *Text:* Provide the initial process description in natural language.
-* *Process Model:* Start with an already existing semi-block-structured BPMN or Petri net and use ProMoAI to refine it.
-* *Event Log:* Start with an event log in the XES format and the initial process model will be derived using process discovery.
+# ProMoAI & PMAx
 
-## Launching as a Streamlit App
-You have two options for running ProMoAI.
-* *On the cloud:* under https://promoai.streamlit.app/.
-* *Locally:* by cloning this repository, installing the required environment and packages, and then running 'streamlit run app.py'.
+**ProMoAI** is an AI-powered suite for Process Mining that leverages Large Language Models (LLMs) to bridge the gap between natural language and technical process analysis. The framework now includes **PMAx**, an autonomous agentic system for data-driven insights.
 
-## Installing as a Python Library
-Run pip install promoai.
+The suite consists of two primary modules:
+
+1. **ProMoAI (Model Generation):** Transforms text or event logs into formal process models (BPMN/Petri nets).
+2. **PMAx (Agentic Analytics):** An autonomous multi-agent framework that functions as a virtual process analyst to query event logs and generate data-grounded reports.
+
+---
+
+## Features
+
+### 1. ProMoAI: Model Generation & Refinement
+
+- **Text-to-Model:** Generate BPMN or PNML models from natural language descriptions.
+- **Model Refinement:** Upload an existing BPMN or Petri net and use AI to modify or extend it via chat.
+- **Discovery Baseline:** Start with an XES event log to discover an initial model, then refine it using the LLM.
+
+### 2. PMAx: Agentic Process Mining (New!)
+
+- **Autonomous Reasoning:** Uses a "divide-and-conquer" architecture with specialized **Engineer** and **Analyst** agents.
+- **Privacy-Preserving:** Only lightweight metadata (column names/types) is sent to the LLM. Raw event data never leaves your local environment.
+- **Deterministic Accuracy:** The system generates and executes local Python code (using whitelisted data preprocessing libraries) to compute exact metrics, avoiding LLM hallucinations.
+- **Comprehensive Reporting:** Automatically generates tables, statistical charts, and narrative insights from high-level business questions.
+
+---
+
+## Launching the App
+
+### On the Cloud
+
+Access the unified suite directly at: [https://promoai.streamlit.app/](https://promoai.streamlit.app/)
+
+### Locally
+
+1. Clone this repository.
+2. Install the required environment and packages (see [Requirements](#requirements)).
+3. Run the application:
+
+- **Unified Suite (ProMoAI + PMAx):**
+  ```bash
+  streamlit run app.py
+  ```
+- **Standalone ProMoAI (Legacy Interface):**
+  ```bash
+  streamlit run promoai_standalone.py
+  ```
+
+### Installation as Python Library:
+
+You can install the core ProMoAI components via pip:
+
+```bash
+pip install promoai
+```
 
 ## Requirements
 
-* *Environment:* the app is tested on both Python 3.9 and 3.10.
-* *Dependencies:* all required dependencies are listed in the file 'requirements.txt'.
-* *Packages:* all required packages are listed in the file 'packages.txt'.
+- _Environment:_ the app is tested on both Python 3.9 and 3.10.
+- _Dependencies:_ all required dependencies are listed in the file 'requirements.txt'.
+- _Packages:_ all required packages are listed in the file 'packages.txt'.
+
+## Citation
+
+If you use this suite in your research, please cite the relevant papers:
+
+### ProMoAI (Process Modeling)
+
+```bibtex
+@inproceedings{DBLP:conf/ijcai/KouraniB0A24,
+  author       = {Humam Kourani and
+                  Alessandro Berti and
+                  Daniel Schuster and
+                  Wil M. P. van der Aalst},
+  title        = {ProMoAI: Process Modeling with Generative {AI}},
+  booktitle    = {Proceedings of the Thirty-Third International Joint Conference on
+                  Artificial Intelligence, {IJCAI} 2024},
+  pages        = {8708--8712},
+  publisher    = {ijcai.org},
+  year         = {2024},
+  url          = {https://www.ijcai.org/proceedings/2024/1014}
+}
+```

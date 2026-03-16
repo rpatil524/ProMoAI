@@ -1,4 +1,3 @@
-import datetime
 import os
 import re
 from typing import Tuple
@@ -13,6 +12,10 @@ from powl import convert_to_petri_net
 import promoai.agents.utils as utils
 from promoai.agents.state import ProcessState
 from promoai.agents.utils import transform_dataframe_for_llms
+from promoai.general_utils.artifact_store import (
+    append_manifest_entry,
+    create_managed_path,
+)
 from promoai.model_generation.code_extraction import execute_code_and_get_variable
 
 
@@ -31,38 +34,38 @@ class PM4PYWrapper:
         You have access to a variable `api` which is an instance of the Process Mining Preprocessing Engine.
 
         AVAILABLE METHODS:
-        1. Filtering (Updates the log in-place):
-           - api.filter_time_range(start_date: str, end_date: str) -> "YYYY-MM-DD"
-           - api.filter_attribute(column: str, value: str)
-           - api.filter_pandas_query(query: str) -> e.g. "amount > 500"
+        1. Filtering (Updates the log in-place): \n
+           - api.filter_time_range(start_date: str, end_date: str) -> "YYYY-MM-DD" \n
+           - api.filter_attribute(column: str, value: str) \n
+           - api.filter_pandas_query(query: str) -> e.g. "amount > 500" \n
 
-        2. Abstraction (Adds text summaries to the context which is passed down to the analyst node):
-           - api.get_dfg_summary() -> Summary of the Directly-Follows Graph (Markovian abstraction of the event log).
-           - api.get_model_summary() -> Summary of the discovered process model (if discovered, otherwise, will be discovered first) (e.g., Petri net).
-           - api.get_variant_summary() -> Summary of the most common variants (unique sequences of activities) in the log.
-           - api.get_case_summary() -> Summary of individual cases, including common patterns and outliers.
+        2. Abstraction (Adds text summaries to the context which is passed down to the analyst node): \n
+           - api.get_dfg_summary() -> Returns a summary (STRING) of the Directly-Follows Graph (Markovian abstraction of the event log). \n
+           - api.get_model_summary() -> Returns a summary (STRING) of the discovered process model (if discovered, otherwise, will be discovered first) (e.g., Petri net).\n
+           - api.get_variant_summary() -> Returns a summary (STRING) of the most common variants (unique sequences of activities) in the log. \n
+           - api.get_case_summary() -> Returns a summary (STRING) of individual cases, including common patterns and outliers. \n
 
-        3. Mining & Analysis:
-           - api.discover_process_model() -> returns nothing, updates internal state with a discovered Petri net model based on the event log.
-           - api.cc_alignments() -> returns conformance checking results based on alignments, i.e., a tuple of fitness, precision, F1.
-           - api.cc_token_based_replay() -> returns conformance checking results based on token-based replay, i.e., a tuple of fitness, precision, F1.
-
+        3. Mining & Analysis: \n
+           - api.discover_process_model() -> returns nothing, updates internal state with a discovered Petri net model based on the event log and saves visualization of it. \n
+           - api.cc_alignments() -> returns conformance checking results based on alignments, i.e., a tuple of fitness, precision, F1. \n
+           - api.cc_token_based_replay() -> returns conformance checking results based on token-based replay, i.e., a tuple of fitness, precision, F1. \n
+        \n
         4. Visualization:
-            - api.save_pnet() -> Saves the discovered Petri net model if available in the state, returns nothing. \n
-            - api.save_visualization(fig, description, data) -> Saves a given visualization figure with a description for context Additionally, add the data used for its generation.
-                Use this to save all kinds of visualizations, including generated via matplotlib, seaborn or plotly.
+            - api.save_pnet() -> Saves the discovered Petri net model as visualization for further analysis. \n
+            - api.save_dfg() -> Saves the Directly-Follows Graph as visualization for further analysis. \n
+            - api.save_visualization(fig, description, data) -> Saves a given visualization figure with a description for context Additionally, add the data used for its generation. \n
+                Use this to save all kinds of visualizations, including generated via matplotlib, seaborn or plotly. \n
                 Additionally, make sure that you ALWAYS provide description to give context to the saved visualization, this will be used in the final report, as well as the data used for its generation in form of a dataframe/dictionary. \n
-            - api.save_dataframe(df, description) -> Saves a given dataframe to a specified file path with a description for context.
-                Use this to pass down any kind of dataframes, including intermediate data manipulations or results of process mining algorithms.
+            - api.save_dataframe(df, description) -> Saves a given dataframe to a specified file path with a description for context. \n
+                Use this to pass down any kind of dataframes, including intermediate data manipulations or results of process mining algorithms. \n
                 There is NO need to pass down the final event log with this method, use the return variable `final_event_log` for that. \n
-
-        RULES:
-        - You can use only the provided methods, as well as matplotlib, seaborn, plotly, numpy and pandas for any additional data manipulation or visualization needs.
-        - Ensure that any code you generate adheres to the whitelisted libraries and can compile without errors.
+        \n
+        RULES: \n
+        - You can use only the provided methods, as well as matplotlib, seaborn, plotly, numpy and pandas for any additional data manipulation or visualization needs. \n
+        - Ensure that any code you generate adheres to the whitelisted libraries and can compile without errors. \n
         - If the user asks to filter (e.g. "only 2023", "remove attribute X"), write Python code to call `api.filter...`. or pandas \n
         - If you make use of other methods from allowed libraries apart from the provided api, make sure to include the necessary import statements in the generated code. \n
         - Always use the save_visualization method to save any visualization, built-in methods in matplotlib or seaborn are disabled. \n
-        - DO generate visualizations sparsely, as they cause significant overhead.
         - Always use the save_dataframe method to save any dataframe, AVOID built-in methods in pandas. \n
 
         """
@@ -93,26 +96,28 @@ class PM4PYWrapper:
             raise ValueError(
                 "Description for the saved dataframe cannot be empty. Please provide a meaningful description to give context to the saved dataframe."
             )
-        id_ = len(self.state["saved_artifacts"]) + 1
-        file_name = f"dataframe_artifact_{id_}.csv"
-        root_dir = os.getcwd()
-        save_dir = os.path.join(root_dir, "temp", "dataframes")
-        # add timestamp to save_dir
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_dir = os.path.join(save_dir, timestamp)
-        os.makedirs(save_dir, exist_ok=True)
-        # add timestamp to filename
-        file_path = os.path.join(save_dir, file_name)
-        # Check if the filepath exists, if it does, raise an error
-        if os.path.exists(file_path):
-            raise FileExistsError(
-                f"The file {file_path} already exists. Please choose a different name to avoid overwriting."
-            )
+        data_preview = transform_dataframe_for_llms(df)
+        file_path = create_managed_path(
+            self.state["artifact_session_dir"],
+            "dataframes",
+            description,
+            ".csv",
+            prefix="dataframe",
+        )
         self.state.update_artifacts(
-            file_path, description, transform_dataframe_for_llms(df)
+            file_path, description, data_preview
         )
         self._add_context(f"Dataframe saved: {description}")
         df.to_csv(file_path, index=False)
+        append_manifest_entry(
+            self.state["artifact_session_dir"],
+            category="dataframes",
+            file_path=file_path,
+            description=description,
+            artifact_type="dataframe",
+            data_preview=data_preview,
+            extra={"rows": len(df), "columns": list(df.columns)},
+        )
 
     def save_visualization(self, fig, description: str, data):
         if description is None or description.strip() == "":
@@ -124,20 +129,13 @@ class PM4PYWrapper:
             if isinstance(data, pd.DataFrame)
             else data
         )
-        id_ = len(self.state["saved_artifacts"]) + 1
-        file_name = f"visual_artifact_{id_}.png"
-        file_name = self.__preprocess_pathway(file_name, "visualization")
-        root_dir = os.getcwd()
-        save_dir = os.path.join(root_dir, "temp", "visualizations")
-        # add timestamp to save_dir
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_dir = os.path.join(save_dir, timestamp)
-        os.makedirs(save_dir, exist_ok=True)
-        file_path = os.path.join(save_dir, file_name)
-        if os.path.exists(file_path):
-            raise FileExistsError(
-                f"The file {file_path} already exists. Please choose a different name to avoid overwriting."
-            )
+        file_path = create_managed_path(
+            self.state["artifact_session_dir"],
+            "visualizations",
+            description,
+            ".png",
+            prefix="visual",
+        )
         self.state.update_artifacts(file_path, description, data)
         self._add_context(f"Visualization generated: {description}")
         # Export the visualization to the specified file path
@@ -147,6 +145,34 @@ class PM4PYWrapper:
             base_path = os.path.splitext(file_path)[0]
             fmt = os.path.splitext(file_path)[1].replace(".", "") or "png"
             fig.render(base_path, format=fmt, cleanup=True)
+        elif hasattr(fig, "write_image"):
+            fig.write_image(file_path)
+        elif str(type(fig)).find('plotly.graph_objs') != -1:
+            fig.write_image(file_path)
+        append_manifest_entry(
+            self.state["artifact_session_dir"],
+            category="visualizations",
+            file_path=file_path,
+            description=description,
+            artifact_type="visualization",
+            data_preview=data,
+        )
+
+    def save_dfg(self):
+        dfg, start_activities, end_activities = pm4py.discover_dfg(self.event_log)
+    
+        fig = pm4py.visualization.dfg.visualizer.apply(dfg, log=self.event_log)
+        self.save_visualization(
+            fig, 
+            "Directly-Follows Graph (DFG)", 
+            data={
+                "dfg": dfg,
+                "start_activities": start_activities,
+                "end_activities": end_activities
+            }
+        )
+
+
 
     def save_pnet(self):
         if self.state["discovered_model"] is not None:
@@ -199,26 +225,23 @@ class PM4PYWrapper:
 
     def get_dfg_summary(self):
         summary = pm4py.llm.abstract_dfg(self.event_log)
-        return self._add_context(f"DFG Summary: {summary}")
+        return summary
 
     def get_model_summary(self):
         if self.pnet is None:
             # Discover the process model if not already done
             self.discover_process_model()
         net, im, fm = self.pnet
-        return self._add_context(
-            f"Model Summary: {pm4py.llm.abstract_petri_net(net, im, fm)}"
-        )
+        model_summary = pm4py.llm.abstract_petri_net(net, im, fm)
+        return model_summary
 
     def get_variant_summary(self):
-        return self._add_context(
-            f"Variant Summary: {pm4py.llm.abstract_variants(self.event_log)}"
-        )
+        variant_summary = pm4py.llm.abstract_variants(self.event_log)
+        return variant_summary
 
     def get_case_summary(self):
-        return self._add_context(
-            f"Case Summary: {pm4py.llm.abstract_case(self.event_log)}"
-        )
+        case_summary = pm4py.llm.abstract_case(self.event_log)
+        return case_summary
 
     # ===== Process Mining Algorithms ===== #
 

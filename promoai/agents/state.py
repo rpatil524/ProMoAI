@@ -2,6 +2,11 @@ from typing import Any, Dict, List, Tuple
 
 from pm4py.objects.log.obj import EventLog
 
+from promoai.general_utils.artifact_store import (
+    append_manifest_entry,
+    create_analysis_session,
+)
+
 
 class ProcessState(dict):
     user_request: List[str]
@@ -34,7 +39,16 @@ class ProcessState(dict):
     # To keep track of sent artifacts to the analyst so we spare tokens
     sent_artifacts: List[str]
 
-    def __init__(self, user_request: str, event_log: EventLog):
+    artifact_session_dir: str
+    source_log_path: str | None
+
+    def __init__(
+        self,
+        user_request: str,
+        event_log: EventLog,
+        artifact_session_dir: str | None = None,
+        source_log_path: str | None = None,
+    ):
         super().__init__()
         self["user_request"] = [user_request]
         if event_log is None:
@@ -42,6 +56,10 @@ class ProcessState(dict):
                 "Event log cannot be None. Please provide a valid event log to initialize the ProcessState."
             )
         self["event_log"] = event_log
+        self["artifact_session_dir"] = artifact_session_dir or create_analysis_session(
+            "pmax"
+        )
+        self["source_log_path"] = source_log_path
         self["log_abstraction"] = self.generate_log_abstraction()
         self["discovered_model"] = None
         self["saved_artifacts"] = {}
@@ -54,6 +72,14 @@ class ProcessState(dict):
         self["extracted_statistics"] = {}
         self["analysis_data"] = {}
         self["sent_artifacts"] = []
+        append_manifest_entry(
+            self["artifact_session_dir"],
+            category="session",
+            file_path=self["artifact_session_dir"],
+            description="Initialized PMAx analysis session.",
+            artifact_type="session",
+            extra={"source_log_path": source_log_path},
+        )
 
     def __str__(self):
         return (
@@ -74,8 +100,31 @@ class ProcessState(dict):
         return self.__str__()
 
     def generate_log_abstraction(self):
-        return f"Event log with {len(self['event_log'])} events and the following attributes: {list(self['event_log'].columns) if len(self['event_log']) > 0 else 'No events'}"
+        df = self['event_log']
+        
+        if df is None or len(df) == 0:
+            return "The event log is empty."
 
+        # Basic Stats
+        msg = f"Event Log Abstraction:\n"
+        msg += f"- Total Events: {len(df)}\n"
+        msg += f"- Total Cases: {df['case:concept:name'].nunique() if 'case:concept:name' in df.columns else 'N/A'}\n"
+        if 'concept:name' in df.columns:
+            msg += f"- Unique activities: {df['concept:name'].dropna().unique().tolist()}\n"
+        msg += "- Columns & Samples:\n"
+
+        for col in df.columns:
+            col_type = df[col].dtype
+            
+            sample_data = df[col].dropna().unique()[:10].tolist()
+            
+            if "datetime" in str(col_type):
+                sample_data = [str(x) for x in sample_data]
+
+            msg += f"  * '{col}' (Type: {col_type}): {sample_data}\n"
+
+        return msg
+    
     def add_context(self, description: str):
         self["context"].append(description)
 

@@ -7,10 +7,22 @@ dependencies:
   - pip
   - graphviz
   - pip:
-      - pm4py
-      - google-genai
       - anthropic
-      - rustxes
-      - setuptools
-      - streamlit
+      - cohere
+      - google-genai
+      - kaleido
+      - markdown
+      - matplotlib
+      - networkx
+      - numpy
+      - pandas
+      - pillow
+      - plotly
+      - pm4py
+      - powl>=2.3.3
       - requests
+      - rustxes
+      - seaborn
+      - streamlit
+      - tabulate
+      - xhtml2pdf
