@@ -82,6 +82,7 @@ def run_page():
             uploaded_log = st.file_uploader(
                 "For **process model discovery**, upload an event log:",
                 type=["xes", "gz"],
+                max_upload_size=5,  # 5 MB limit for the online app
                 help=DISCOVERY_HELP,
             )
 
@@ -119,6 +120,8 @@ def run_page():
             uploaded_file = st.file_uploader(
                 "For **process model improvement**, upload a semi-block-structured BPMN or Petri net:",
                 type=["bpmn", "pnml"],
+                max_upload_size=5,  # 5 MB limit for the online app
+
             )
             submit_button = st.form_submit_button(label="Upload")
             if submit_button:
