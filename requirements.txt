@@ -14,6 +14,6 @@ powl>=2.3.3
 requests
 rustxes
 seaborn
-streamlit
+streamlit==1.55.0
 tabulate
 xhtml2pdf

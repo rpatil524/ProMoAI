@@ -51,7 +51,7 @@ def run_page():
                     llm_name=ai_model_name, 
                     ai_provider=provider
                 )
-                st.success("Credentials saved! You can now navigate to the ProMoAI page.")
+                st.success("Credentials saved! You can now navigate to ProMoAI or PMAx.")
     st.markdown("<br>", unsafe_allow_html=True) # Adds some breathing room
     st.divider()
     

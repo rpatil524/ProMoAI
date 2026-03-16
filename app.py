@@ -18,8 +18,8 @@ def _launch_via_streamlit() -> None:
 def run_app():
     pg = st.navigation([
         st.Page("setup_page.py", title="Setup", icon="⚙️", default=True),
-        st.Page("promoai_page.py", title="ProMoAI", icon="🤖"),
-        st.Page("promo_agents_page.py", title="ProMoAgents", icon="🕵🏻"),
+        st.Page("promoai_page.py", title="ProMoAI", icon="🦾"),
+        st.Page("pmax.py", title="PMAx", icon="🕵🏻"),
     ])
 
     pg.run()

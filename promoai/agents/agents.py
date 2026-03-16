@@ -110,15 +110,13 @@ def engineer_node(
     DATA: \n
     - Assume that the log is already loaded and accessible via api.event_log. \n
     - Furthermore, the data has the following structure: {state['log_abstraction']} \n
-    - Activities are in the 'concept:name' column, timestamps in 'time:timestamp', case identifier in 'case:concept:name'. \n
-
+    - Activities should be stored in the 'concept:name' column, timestamps in 'time:timestamp', case identifier in 'case:concept:name'. \n
     EXPECTED OUTPUT:
     - Always return the final event log as `final_event_log` variable after any preprocessing steps, so it can be passed down to the subsequent agent.
 
     IMPORTANT:
     - If the previous code you generated is able to answer the user's new request without any modifications, just return the event log without any changes.
-
-
+    - MANDATORY PREPROCESSING: if the actvities or timestamps or case identifiers are not in the expected columns, you need to preprocess the log to ensure they are. You can use the API methods or pandas for this. Otherwise, you will trigger errors in the subsequent steps. \n
     """
     msg_history = (
         [

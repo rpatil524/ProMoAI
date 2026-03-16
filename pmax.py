@@ -17,8 +17,13 @@ from promoai.general_utils.artifact_store import (
     create_managed_path,
     write_bytes_artifact,
     write_text_artifact,
+    disk_cleanup,
+    ARTIFACTS_ROOT,
+
 )
 from promoai.general_utils.llm_connection import LLMConnection
+from promoai.general_utils.constants import ENABLE_PATH_EXPOSURE
+
 
 
 def get_active_artifact_session_dir() -> str | None:
@@ -171,7 +176,7 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
 
                     # Logic for Images vs Dataframes
                     if b_val.lower().endswith((".png", ".jpg", ".jpeg", ".svg")):
-                        st.image(b_val, use_column_width=True)
+                        st.image(b_val, width="stretch")
                     elif b_val.lower().endswith(".csv"):
                         df = pd.read_csv(b_val)
                         # show only the first 30 rows
@@ -191,6 +196,8 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
 
 
 def chat(llm_credentials: LLMConnection):
+    # delete old artifacts from previous sessions to save disk space
+    disk_cleanup(ARTIFACTS_ROOT, ttl=1)
     for message in st.session_state.messages:
         display_chat_message(message["role"], message["content"])
 
@@ -267,7 +274,7 @@ def run_page():
         st.session_state["setup_complete"] = False
 
     artifact_session_dir = get_active_artifact_session_dir()
-    if artifact_session_dir:
+    if artifact_session_dir and ENABLE_PATH_EXPOSURE:
         st.sidebar.caption("Artifact folder")
         st.sidebar.code(artifact_session_dir, language=None)
         st.sidebar.caption("The manifest is stored as `manifest.jsonl` inside this folder.")
@@ -294,7 +301,7 @@ def run_page():
                     if pdf_bytes:
                         pdf_path = persist_pdf_report(pdf_bytes)
                         st.sidebar.success("Successfully built PDF report!")
-                        if pdf_path:
+                        if pdf_path and ENABLE_PATH_EXPOSURE:
                             st.sidebar.caption(f"Saved to: `{pdf_path}`")
                     else:
                         st.sidebar.error("Error: Failed to generate PDF report.")
@@ -312,13 +319,37 @@ def run_page():
 
 
     if not st.session_state["setup_complete"]:
-        st.header("🔧 Agents Setup")
+        st.markdown("""
+            <style>
+            /* Style the form container */
+            [data-testid="stForm"] {
+                border: 1px solid #333;
+                border-radius: 15px;
+                padding: 30px;
+                background-color: #111; /* Darker background */
+                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            }
+            
+            /* Center the button and make it 'pop' */
+            div.stFormSubmitButton > button {
+                width: 100%;
+                background-color: #ff4b4b;
+                color: white;
+                border-radius: 10px;
+                height: 3em;
+                font-weight: bold;
+                border: none;
+            }
+            </style>
+            """, unsafe_allow_html=True)
 
         with st.form(key="model_gen_form"):
+            st.markdown("### 🛠️ Agents Setup")
             uploaded_log = st.file_uploader(
                 "For **using an agent**, upload an event log:",
-                type=["xes", "gz"],
-                help=DISCOVERY_HELP,
+                type=["xes", "gz", "csv"],
+                max_upload_size=5,  # 5 MB limit for the online app
+
             )
             submission_button = st.form_submit_button(label="Start Analysis 🚀")
             if submission_button:
