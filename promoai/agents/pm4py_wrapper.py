@@ -104,9 +104,7 @@ class PM4PYWrapper:
             ".csv",
             prefix="dataframe",
         )
-        self.state.update_artifacts(
-            file_path, description, data_preview
-        )
+        self.state.update_artifacts(file_path, description, data_preview)
         self._add_context(f"Dataframe saved: {description}")
         df.to_csv(file_path, index=False)
         append_manifest_entry(
@@ -147,7 +145,7 @@ class PM4PYWrapper:
             fig.render(base_path, format=fmt, cleanup=True)
         elif hasattr(fig, "write_image"):
             fig.write_image(file_path)
-        elif str(type(fig)).find('plotly.graph_objs') != -1:
+        elif str(type(fig)).find("plotly.graph_objs") != -1:
             fig.write_image(file_path)
         append_manifest_entry(
             self.state["artifact_session_dir"],
@@ -160,19 +158,17 @@ class PM4PYWrapper:
 
     def save_dfg(self):
         dfg, start_activities, end_activities = pm4py.discover_dfg(self.event_log)
-    
+
         fig = pm4py.visualization.dfg.visualizer.apply(dfg, log=self.event_log)
         self.save_visualization(
-            fig, 
-            "Directly-Follows Graph (DFG)", 
+            fig,
+            "Directly-Follows Graph (DFG)",
             data={
                 "dfg": dfg,
                 "start_activities": start_activities,
-                "end_activities": end_activities
-            }
+                "end_activities": end_activities,
+            },
         )
-
-
 
     def save_pnet(self):
         if self.state["discovered_model"] is not None:

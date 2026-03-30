@@ -1,0 +1,67 @@
+/* Style the form container */
+[data-testid="stImage"] {
+    background-color: #ffffff;
+    padding: 15px;
+    border-radius: 12px;
+}
+[data-testid="stForm"] {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 40px;
+    background-color: var(--background-color) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+}
+
+div[data-testid="stSegmentedControl"] {
+    gap: 10px;
+}
+
+button[data-baseweb="tab"] {
+    font-size: 18px !important;
+}
+
+
+div.stFormSubmitButton > button,
+div.stButton > button {
+    width: 100%;
+    background: linear-gradient(45deg, #FF4B4B, #FF8F8F);
+    color: white !important;
+    border-radius: 10px !important;
+    height: 60px !important;
+    font-size: 20px !important;
+    padding: 10px !important;
+    font-weight: bold !important;
+    border: none !important;
+    transition: all 0.2s ease-in-out !important;
+}
+
+div.stFormSubmitButton > button:hover,
+div.stButton > button:hover {
+    box-shadow: 0 0 20px rgba(255, 75, 75, 0.6) !important;
+    transform: translateY(-1px);
+    background-color: #ff5f5f !important;
+}
+
+div.stFormSubmitButton > button:active,
+div.stButton > button:active {
+    transform: scale(0.98);
+    box-shadow: 0 0 10px rgba(255, 75, 75, 0.4) !important;
+}
+[data-testid="stImage"] {
+    background-color: #ffffff;
+    padding: 15px;
+    border-radius: 12px;
+}
+
+.stTextArea textarea, .stNumberInput input {
+    background-color: var(--background-color) !important;
+    border: 1px solid #333 !important;
+    border-radius: 10px !important;
+}
+.api-config-marker + div[data-testid="stVerticalBlock"] {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 40px;
+    background-color: var(--background-color) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
+}
