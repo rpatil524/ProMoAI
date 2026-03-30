@@ -565,9 +565,9 @@ def generate_result_with_error_handling(
     standard_error_message=ERROR_MESSAGE_FOR_MODEL_GENERATION,
 ) -> tuple[str, any, list[Any]]:
     provider_args, internal_args = _split_llm_args(llm_args)
-    trace_session_dir = internal_args.get("artifact_session_dir") or create_analysis_session(
-        "llm"
-    )
+    trace_session_dir = internal_args.get(
+        "artifact_session_dir"
+    ) or create_analysis_session("llm")
     effective_llm_args = dict(provider_args)
     effective_llm_args["artifact_session_dir"] = trace_session_dir
     error_history = []
@@ -668,7 +668,9 @@ def generate_response_with_history(
     )
 
     try:
-        data = _requests_post(url, headers=headers, json_=payload, timeout_s=(3.05, 120))
+        data = _requests_post(
+            url, headers=headers, json_=payload, timeout_s=(3.05, 120)
+        )
     except Exception as e:
         _persist_llm_response_trace(
             trace_session_dir or create_analysis_session("llm"),

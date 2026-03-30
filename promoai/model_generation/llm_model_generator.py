@@ -21,7 +21,9 @@ class LLMProcessModelGenerator:
     @staticmethod
     def _ensure_trace_args(llm_args: dict | None) -> dict:
         effective_args = dict(llm_args or {})
-        effective_args.setdefault("artifact_session_dir", create_analysis_session("promoai"))
+        effective_args.setdefault(
+            "artifact_session_dir", create_analysis_session("promoai")
+        )
         return effective_args
 
     @classmethod

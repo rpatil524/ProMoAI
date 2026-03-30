@@ -44,7 +44,11 @@ def _persist_generated_code(
         file_path=file_path,
         description=f"{role.title()} generated code for request {request_index}.",
         artifact_type="generated_code",
-        extra={"role": role, "request_index": request_index, "user_request": user_request},
+        extra={
+            "role": role,
+            "request_index": request_index,
+            "user_request": user_request,
+        },
     )
     return file_path
 
@@ -54,7 +58,9 @@ def _persist_event_log_snapshot(
 ) -> str | None:
     try:
         dataframe = (
-            event_log if isinstance(event_log, pd.DataFrame) else pm4py.convert_to_dataframe(event_log)
+            event_log
+            if isinstance(event_log, pd.DataFrame)
+            else pm4py.convert_to_dataframe(event_log)
         )
     except Exception:
         return None
@@ -138,7 +144,7 @@ def engineer_node(
         llm_args=effective_llm_args,
         max_iterations=3,
         additional_iterations=2,
-        standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ENG
+        standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ENG,
     )
     request_index = len(state["user_request"])
     _persist_generated_code(
@@ -262,7 +268,9 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
         for k, v in artifact_id_to_description_and_content.items()
         if v["type"] == "dataframe"
     }
-    long_dfs = [k for k, v in artifact_dataframes.items() if len(str(v['content'])) > 500]
+    long_dfs = [
+        k for k, v in artifact_dataframes.items() if len(str(v["content"])) > 500
+    ]
     artifact_df_strings = "\n".join(
         [
             f"\n =====DATAFRAME {k}======:\n Description: {v['description']} \n Content: {v['content']} \n \
@@ -308,7 +316,7 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
 
     valid_artifact_ids = list(artifact_id_to_description_and_content.keys())
     partial_function = partial(
-        code_extraction_report, valid_artifact_ids=valid_artifact_ids, long_dfs = long_dfs
+        code_extraction_report, valid_artifact_ids=valid_artifact_ids, long_dfs=long_dfs
     )
     try:
         effective_llm_args = dict(LLMCredentials.args or {})
@@ -322,7 +330,7 @@ def analyst_node(state: ProcessState, LLMCredentials: LLMConnection) -> ProcessS
             llm_args=effective_llm_args,
             max_iterations=3,
             additional_iterations=2,
-            standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ANALYST
+            standard_error_message=ERROR_MESSAGE_CODE_GENERATION_ANALYST,
         )
         state["sent_artifacts"].extend(
             list(artifact_id_to_description_and_content.keys())

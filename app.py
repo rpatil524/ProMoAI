@@ -6,6 +6,19 @@ import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 
+def inject_css() -> None:
+    with open("styles.css", "r") as file:
+        css_file = file.read()
+    st.markdown(
+        f"""
+    <style>
+    {css_file}
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
+
 def _launch_via_streamlit() -> None:
     script_path = Path(__file__).resolve()
     result = subprocess.run(
@@ -16,13 +29,16 @@ def _launch_via_streamlit() -> None:
 
 
 def run_app():
-    pg = st.navigation([
-        st.Page("setup_page.py", title="Setup", icon="⚙️", default=True),
-        st.Page("promoai_page.py", title="ProMoAI", icon="🦾"),
-        st.Page("pmax.py", title="PMAx", icon="🕵🏻"),
-    ])
+    pg = st.navigation(
+        [
+            st.Page("setup_page.py", title="Setup", icon="⚙️", default=True),
+            st.Page("promoai_page.py", title="ProMoAI", icon="🦾"),
+            st.Page("pmax.py", title="PMAx", icon="🕵🏻"),
+        ]
+    )
 
     pg.run()
+
 
 def footer():
     style = """
@@ -88,5 +104,7 @@ if __name__ == "__main__":
     # does not provide one, so we relaunch through the Streamlit CLI.
     if get_script_run_ctx() is None:
         _launch_via_streamlit()
+    inject_css()
     st.set_page_config(page_title="ProMoAI", page_icon="🤖")
+
     run_app()

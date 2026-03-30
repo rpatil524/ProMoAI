@@ -20,7 +20,9 @@ def generate_model_from_event_log(*args, **kwargs):
 
 
 def generate_model_from_petri_net(*args, **kwargs):
-    from promoai.main import generate_model_from_petri_net as _generate_model_from_petri_net
+    from promoai.main import (
+        generate_model_from_petri_net as _generate_model_from_petri_net,
+    )
 
     return _generate_model_from_petri_net(*args, **kwargs)
 
