@@ -50,7 +50,10 @@ def run_page():
                 st.session_state["llm_credentials"] = LLMConnection(
                     api_key=api_key, llm_name=ai_model_name, ai_provider=provider
                 )
-                st.success("Credentials saved! You can now navigate to ProMoAI or PMAx.")
+                st.success(
+                    "Credentials saved! You can now navigate to ProMoAI or PMAx."
+                )
+
 
 if __name__ in {"__main__", "__page__"}:
     run_page()

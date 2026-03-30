@@ -1,6 +1,7 @@
 import subprocess
 import sys
 from pathlib import Path
+
 import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
@@ -28,11 +29,18 @@ def _launch_via_streamlit() -> None:
 
 
 def run_app():
-    pg = st.navigation([
-        st.Page("setup_page.py", title="Setup", icon=":material/settings_suggest:", default=True),
-        st.Page("promoai_page.py", title="ProMoAI", icon=":material/account_tree:"),
-        st.Page("pmax.py", title="PMAx", icon=":material/query_stats:"),
-    ])
+    pg = st.navigation(
+        [
+            st.Page(
+                "setup_page.py",
+                title="Setup",
+                icon=":material/settings_suggest:",
+                default=True,
+            ),
+            st.Page("promoai_page.py", title="ProMoAI", icon=":material/account_tree:"),
+            st.Page("pmax.py", title="PMAx", icon=":material/query_stats:"),
+        ]
+    )
     pg.run()
 
 
@@ -41,7 +49,9 @@ def sidebar_info():
     with st.sidebar:
 
         # ---------- RESOURCES (TOP) ----------
-        st.markdown("<div class='sidebar-header'>Resources</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div class='sidebar-header'>Resources</div>", unsafe_allow_html=True
+        )
 
         st.markdown(
             """
@@ -55,22 +65,22 @@ def sidebar_info():
                 </a>
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
         st.markdown(
             """
-            <div class="sidebar-card" style="opacity:0.7;">
-                <a class="sidebar-link" href="#" style="cursor: default;">
+            <div class="sidebar-card">
+                <a class="sidebar-link" href="https://doi.org/10.48550/arXiv.2603.15351" target="_blank">
                     <span style="font-size:1.2rem;">📄</span>
                     <div>
                         <span class="card-text-main">PMAx Paper</span>
-                        <span class="card-text-sub">Coming Soon</span>
+                        <span class="card-text-sub">Pre-Print</span>
                     </div>
                 </a>
             </div>
             """,
-            unsafe_allow_html=True
+            unsafe_allow_html=True,
         )
 
         st.markdown(
@@ -104,12 +114,8 @@ def sidebar_info():
 if __name__ == "__main__":
     if get_script_run_ctx() is None:
         _launch_via_streamlit()
-
-    st.set_page_config(
-        page_title="ProMoAI",
-        page_icon="🤖",
-        layout="wide"
-    )
+    inject_css()
+    st.set_page_config(page_title="ProMoAI", page_icon="🤖")
 
     sidebar_info()
     run_app()

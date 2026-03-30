@@ -268,7 +268,9 @@ def chat(llm_credentials: LLMConnection):
                 state="running",
             )
             try:
-                updated_state = analyst_node(st.session_state.agent_state, llm_credentials)
+                updated_state = analyst_node(
+                    st.session_state.agent_state, llm_credentials
+                )
             except Exception as e:
                 st.error(f"Error during calling the Analyst: {e}")
                 return
@@ -305,7 +307,7 @@ def run_page():
         )
 
     if st.session_state["setup_complete"]:
-        if st.sidebar.button("🔄 Reset History"):
+        if st.sidebar.button("🔄 Reset History", use_container_width=True):
             st.session_state["setup_complete"] = False
             if "uploaded_log" in st.session_state:
                 del st.session_state["uploaded_log"]
@@ -318,7 +320,7 @@ def run_page():
             if "messages" in st.session_state:
                 del st.session_state["messages"]
             st.rerun()
-        if st.sidebar.button("Build PDF Report"):
+        if st.sidebar.button("Build PDF Report", use_container_width=True):
             pdf_bytes = None
             if st.session_state.messages:
                 with st.spinner("Converting chat and artifacts to PDF..."):
