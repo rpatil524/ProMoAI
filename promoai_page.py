@@ -134,6 +134,7 @@ def render_submission_form(input_type):
 
     if submit_button and input_type == InputType.DATA.value:
         if uploaded_log is None:
+            print("Yeahhh")
             st.error(body="No file is selected!", icon="⚠️")
             return
         temp_path = None
@@ -145,13 +146,14 @@ def render_submission_form(input_type):
 
             st.session_state["model_gen"] = process_model
             st.session_state["feedback"] = []
+            st.rerun()
+
         except Exception as e:
             st.error(body=f"Error during discovery: {e}", icon="⚠️")
             return
         finally:
             if temp_path and os.path.exists(temp_path):
                 os.remove(temp_path)
-                st.rerun()
     elif input_type == InputType.MODEL.value:
         if submit_button:
             if uploaded_file is None:
