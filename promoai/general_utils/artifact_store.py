@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -155,12 +155,11 @@ def append_manifest_entry(
     with manifest_path.open("a", encoding="utf-8") as manifest_file:
         manifest_file.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-def disk_cleanup(root : str, ttl : int = 3) -> None:
+
+def disk_cleanup(root: str, ttl: int = 3) -> None:
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=ttl)
-    SESSION_RE = re.compile(
-        r"^(?P<prefix>.+)_(?P<ts>\d{8}_\d{6})_(?P<id>[0-9a-f]{8})$"
-    )
+    SESSION_RE = re.compile(r"^(?P<prefix>.+)_(?P<ts>\d{8}_\d{6})_(?P<id>[0-9a-f]{8})$")
 
     if not root.exists():
         return
@@ -174,7 +173,9 @@ def disk_cleanup(root : str, ttl : int = 3) -> None:
             continue
 
         try:
-            ts = datetime.strptime(m.group("ts"), "%Y%m%d_%H%M%S").replace(tzinfo=timezone.utc)
+            ts = datetime.strptime(m.group("ts"), "%Y%m%d_%H%M%S").replace(
+                tzinfo=timezone.utc
+            )
         except ValueError:
             continue
 

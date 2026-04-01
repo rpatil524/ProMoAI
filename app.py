@@ -6,6 +6,19 @@ import streamlit as st
 from streamlit.runtime.scriptrunner import get_script_run_ctx
 
 
+def inject_css() -> None:
+    with open("styles.css", "r") as file:
+        css_file = file.read()
+    st.markdown(
+        f"""
+    <style>
+    {css_file}
+    </style>
+    """,
+        unsafe_allow_html=True,
+    )
+
+
 def _launch_via_streamlit() -> None:
     script_path = Path(__file__).resolve()
     result = subprocess.run(
@@ -16,77 +29,118 @@ def _launch_via_streamlit() -> None:
 
 
 def run_app():
-    pg = st.navigation([
-        st.Page("setup_page.py", title="Setup", icon="⚙️", default=True),
-        st.Page("promoai_page.py", title="ProMoAI", icon="🦾"),
-        st.Page("pmax.py", title="PMAx", icon="🕵🏻"),
-    ])
-
+    pg = st.navigation(
+        [
+            st.Page(
+                "setup_page.py",
+                title="Setup",
+                icon=":material/settings_suggest:",
+                default=True,
+            ),
+            st.Page("promoai_page.py", title="ProMoAI", icon=":material/account_tree:"),
+            st.Page("pmax.py", title="PMAx", icon=":material/query_stats:"),
+        ]
+    )
     pg.run()
 
-def footer():
-    style = """
-        <style>
-          .footer-container {
-              position: fixed;
-              left: 0;
-              bottom: 0;
-              width: 100%;
-              text-align: center;
-              padding: 15px 0;
-              background-color: white;
-              border-top: 2px solid lightgrey;
-              z-index: 100;
-          }
 
-          .footer-text, .header-text {
-              margin: 0;
-              padding: 0;
-          }
-          .footer-links {
-              margin: 0;
-              padding: 0;
-          }
-          .footer-links a {
-              margin: 0 10px;
-              text-decoration: none;
-              color: blue;
-          }
-          .footer-links img {
-              vertical-align: middle;
-          }
-        </style>
-        """
+def sidebar_info():
+    if "resettable" not in st.session_state:
+        st.session_state["resettable"] = False
 
-    foot = f"""
-        <div class='footer-container'>
-            <div class='footer-text'>
-                Developed by
-                <a href="https://www.linkedin.com/in/humam-kourani-98b342232/" target="_blank" style="text-decoration:none;">Humam Kourani</a>
-                and
-                <a href="https://www.linkedin.com/in/alessandro-berti-2a483766/" target="_blank" style="text-decoration:none;">Alessandro Berti</a>
-                at the
-                <a href="https://www.fit.fraunhofer.de/" target="_blank" style="text-decoration:none;">Fraunhofer Institute for Applied Information Technology FIT</a>.
-            </div>
-            <div class='footer-links'>
-                <a href="https://doi.org/10.24963/ijcai.2024/1014" target="_blank">
-                    <img src="https://img.shields.io/badge/ProMoAI:%20Process%20Modeling%20with%20Generative%20AI-gray?logo=googledocs&logoColor=white&labelColor=red" alt="ProMoAI Paper">
-                </a>
-                <a href="mailto:humam.kourani@fit.fraunhofer.de?cc=a.berti@pads.rwth-aachen.de;" target="_blank">
-                    <img src="https://img.shields.io/badge/Email-gray?logo=minutemailer&logoColor=white&labelColor=green" alt="Email Humam Kourani">
+    with st.sidebar:
+        if st.session_state["resettable"]:
+            st.markdown(
+                "<div class='sidebar-header'>Session</div>", unsafe_allow_html=True
+            )
+
+            if st.sidebar.button("🔄 Reset PMAx", use_container_width=True):
+                st.session_state["setup_complete"] = False
+                if "uploaded_log" in st.session_state:
+                    del st.session_state["uploaded_log"]
+                if "uploaded_log_path" in st.session_state:
+                    del st.session_state["uploaded_log_path"]
+                if "agent_state" in st.session_state:
+                    del st.session_state["agent_state"]
+                if "artifact_session_dir" in st.session_state:
+                    del st.session_state["artifact_session_dir"]
+                if "messages" in st.session_state:
+                    del st.session_state["messages"]
+                if "pdf_bytes" in st.session_state:
+                    del st.session_state["pdf_bytes"]
+                if "pdf_signature" in st.session_state:
+                    del st.session_state["pdf_signature"]
+                st.session_state["resettable"] = False
+                st.rerun()
+
+        # ---------- RESOURCES (TOP) ----------
+        st.markdown(
+            "<div class='sidebar-header'>Resources</div>", unsafe_allow_html=True
+        )
+
+        st.markdown(
+            """
+            <div class="sidebar-card">
+                <a class="sidebar-link" href="https://doi.org/10.24963/ijcai.2024/1014" target="_blank">
+                    <span style="font-size:1.2rem;">📄</span>
+                    <div>
+                        <span class="card-text-main">ProMoAI Paper</span>
+                        <span class="card-text-sub">IJCAI 2024</span>
+                    </div>
                 </a>
             </div>
-        </div>
-        """
+            """,
+            unsafe_allow_html=True,
+        )
 
-    st.markdown(style, unsafe_allow_html=True)
-    st.markdown(foot, unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="sidebar-card">
+                <a class="sidebar-link" href="https://doi.org/10.48550/arXiv.2603.15351" target="_blank">
+                    <span style="font-size:1.2rem;">📄</span>
+                    <div>
+                        <span class="card-text-main">PMAx Paper</span>
+                        <span class="card-text-sub">Pre-Print</span>
+                    </div>
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown(
+            """
+
+            <div class='sidebar-header'>Support</div>
+
+            <div class="sidebar-card">
+                <a class="sidebar-link" href="mailto:humam.kourani@fit.fraunhofer.de;a.berti@pads.rwth-aachen.de;anton.antonov@fit.fraunhofer.de?subject=ProMoAI Inquiry">
+                    <span style="font-size:1.2rem;">✉️</span>
+                    <div>
+                        <span class="card-text-main">Contact Developers</span>
+                    </div>
+                </a>
+            </div>
+
+            <div class='sidebar-header'>Developed at</div>
+
+            <a href="https://www.fit.fraunhofer.de/" target="_blank" class="branding-badge">
+                <img src="https://www.fit.fraunhofer.de/content/dam/fit/fit.svg">
+                <div class="branding-text">
+                    Fraunhofer Institute for Applied<br>Information Technology FIT
+                </div>
+            </a>
+
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 if __name__ == "__main__":
-    # Streamlit pages require a script run context; plain `python start.py`
-    # does not provide one, so we relaunch through the Streamlit CLI.
     if get_script_run_ctx() is None:
         _launch_via_streamlit()
+    inject_css()
     st.set_page_config(page_title="ProMoAI", page_icon="🤖")
+
+    sidebar_info()
     run_app()

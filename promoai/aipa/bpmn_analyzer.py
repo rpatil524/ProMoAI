@@ -71,8 +71,12 @@ class BPMNAnalyzer:
             selected_elements_query = f"\n \n The user has exclusively selected the following elements of the BPMN model (represented as a json): {selected_elements_json}"
         else:
             selected_elements_query = f"\n \n The user has not selected any elements."
-            
-        system_message = create_message(message=selected_elements_query, role="system", model_abstraction=self.model_abstraction)
+
+        system_message = create_message(
+            message=selected_elements_query,
+            role="system",
+            model_abstraction=self.model_abstraction,
+        )
         llm_messages = self._conversation + [system_message, user_message]
 
         self.last_response = query_llm(
@@ -82,6 +86,6 @@ class BPMNAnalyzer:
             ai_provider=self.ai_provider,
             llm_args=self.llm_args,
         )
-        
+
         self._conversation.append(user_message)
         self._conversation.append({"role": "assistant", "content": self.last_response})

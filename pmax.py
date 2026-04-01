@@ -7,23 +7,20 @@ import pandas as pd
 import pm4py
 import streamlit as st
 from powl import import_event_log
-from xhtml2pdf import pisa
 
 from promoai.agents.agents import analyst_node, engineer_node, init_state
-from promoai.general_utils.app_utils import DISCOVERY_HELP
 from promoai.general_utils.artifact_store import (
     append_manifest_entry,
+    ARTIFACTS_ROOT,
     create_analysis_session,
     create_managed_path,
+    disk_cleanup,
     write_bytes_artifact,
     write_text_artifact,
-    disk_cleanup,
-    ARTIFACTS_ROOT,
-
 )
-from promoai.general_utils.llm_connection import LLMConnection
 from promoai.general_utils.constants import ENABLE_PATH_EXPOSURE
-
+from promoai.general_utils.llm_connection import LLMConnection
+from xhtml2pdf import pisa
 
 
 def get_active_artifact_session_dir() -> str | None:
@@ -54,7 +51,9 @@ def persist_uploaded_event_log(uploaded_file) -> tuple[str, str, pd.DataFrame]:
     )
 
     log = import_event_log(raw_log_path)
-    normalized_log = log if isinstance(log, pd.DataFrame) else pm4py.convert_to_dataframe(log)
+    normalized_log = (
+        log if isinstance(log, pd.DataFrame) else pm4py.convert_to_dataframe(log)
+    )
     normalized_log_path = create_managed_path(
         artifact_session_dir,
         "event_logs",
@@ -97,6 +96,7 @@ def persist_pdf_report(pdf_bytes: bytes) -> str | None:
     )
     return pdf_path
 
+
 def export_messages_to_pdf(messages) -> bytes:
     html_content = f"""
     <html>
@@ -133,19 +133,23 @@ def export_messages_to_pdf(messages) -> bytes:
                 # Use markdown library for cleaner HTML (faster for the PDF engine)
                 clean_text = markdown.markdown(b_val)
                 html_content += f"<div class='text'>{clean_text}</div>"
-            
+
             elif b_type == "artifact":
                 if os.path.exists(b_val):
-                    if b_val.lower().endswith(('.png', '.jpg', '.jpeg')):
+                    if b_val.lower().endswith((".png", ".jpg", ".jpeg")):
                         # INSTEAD OF BASE64: Use absolute file path
                         abs_path = os.path.abspath(b_val)
-                        html_content += f"<div class='text'><img src='{abs_path}'></div>"
-                    
-                    elif b_val.lower().endswith('.csv'):
+                        html_content += (
+                            f"<div class='text'><img src='{abs_path}'></div>"
+                        )
+
+                    elif b_val.lower().endswith(".csv"):
                         df = pd.read_csv(b_val)
                         # LIMIT ROWS: PDF tables shouldn't be 1000 rows long
                         if len(df) > 30:
-                            html_content += "<p><i>(Showing first 30 rows of data)</i></p>"
+                            html_content += (
+                                "<p><i>(Showing first 30 rows of data)</i></p>"
+                            )
                             df = df.head(30)
                         html_content += df.to_html(index=False)
 
@@ -154,8 +158,10 @@ def export_messages_to_pdf(messages) -> bytes:
     pdf_buffer = BytesIO()
     # xhtml2pdf works better with file paths if we provide a path helper
     pisa_status = pisa.CreatePDF(html_content, dest=pdf_buffer)
-    
+
     return None if pisa_status.err else pdf_buffer.getvalue()
+
+
 def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
     """Renders either a simple string or a structured artifact report."""
     with st.chat_message(role):
@@ -181,14 +187,20 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
                         df = pd.read_csv(b_val)
                         # show only the first 30 rows
                         if len(df) > 30:
-                            st.markdown("<p><i>(Showing first 30 rows of data)</i></p>", unsafe_allow_html=True)
+                            st.markdown(
+                                "<p><i>(Showing first 30 rows of data)</i></p>",
+                                unsafe_allow_html=True,
+                            )
                             df = df.head(30)
                         st.dataframe(df, use_container_width=True)
                     elif b_val.lower().endswith(".parquet"):
                         df = pd.read_parquet(b_val)
                         # show only the first 30 rows
                         if len(df) > 30:
-                            st.markdown("<p><i>(Showing first 30 rows of data)</i></p>", unsafe_allow_html=True)
+                            st.markdown(
+                                "<p><i>(Showing first 30 rows of data)</i></p>",
+                                unsafe_allow_html=True,
+                            )
                             df = df.head(30)
                         st.dataframe(df, use_container_width=True)
         else:
@@ -198,6 +210,11 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
 def chat(llm_credentials: LLMConnection):
     # delete old artifacts from previous sessions to save disk space
     disk_cleanup(ARTIFACTS_ROOT, ttl=1)
+    if "pdf_bytes" not in st.session_state:
+        st.session_state["pdf_bytes"] = None
+    if "pdf_signature" not in st.session_state:
+        st.session_state["pdf_signature"] = 0
+
     for message in st.session_state.messages:
         display_chat_message(message["role"], message["content"])
 
@@ -220,6 +237,9 @@ def chat(llm_credentials: LLMConnection):
                 artifact_type="user_request",
             )
         display_chat_message("user", prompt)
+        resettable = "messages" in st.session_state and len(
+            st.session_state["messages"]
+        )
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         # Add user message to chat history
@@ -256,16 +276,23 @@ def chat(llm_credentials: LLMConnection):
                 state="running",
             )
             try:
-                updated_state = analyst_node(st.session_state.agent_state, llm_credentials)
+                updated_state = analyst_node(
+                    st.session_state.agent_state, llm_credentials
+                )
             except Exception as e:
                 st.error(f"Error during calling the Analyst: {e}")
                 return
             st.session_state.agent_state = updated_state
             status.update(label="Report Generated! ✅", state="complete", expanded=False)
-
         report = st.session_state.agent_state["final_report"]
         display_chat_message("assistant", report)
         st.session_state.messages.append({"role": "assistant", "content": report})
+        resettable = "messages" in st.session_state and len(
+            st.session_state["messages"]
+        )
+        if st.session_state["resettable"] != resettable:
+            st.session_state["resettable"] = resettable
+            st.rerun()
 
 
 def run_page():
@@ -275,7 +302,10 @@ def run_page():
 
     if "messages" not in st.session_state:
         st.session_state["messages"] = [
-            {"role": "assistant", "content": "Hey! I am PMAx. How can I help you today?"}
+            {
+                "role": "assistant",
+                "content": "Hey! I am PMAx. How can I help you today?",
+            }
         ]
 
     if "setup_complete" not in st.session_state:
@@ -285,97 +315,42 @@ def run_page():
     if artifact_session_dir and ENABLE_PATH_EXPOSURE:
         st.sidebar.caption("Artifact folder")
         st.sidebar.code(artifact_session_dir, language=None)
-        st.sidebar.caption("The manifest is stored as `manifest.jsonl` inside this folder.")
-
-    if st.session_state["setup_complete"]:
-        if st.sidebar.button("🔄 Reset History"):
-            st.session_state["setup_complete"] = False
-            if "uploaded_log" in st.session_state:
-                del st.session_state["uploaded_log"]
-            if "uploaded_log_path" in st.session_state:
-                del st.session_state["uploaded_log_path"]
-            if "agent_state" in st.session_state:
-                del st.session_state["agent_state"]
-            if "artifact_session_dir" in st.session_state:
-                del st.session_state["artifact_session_dir"]
-            if "messages" in st.session_state:
-                del st.session_state["messages"]
-            st.rerun()
-        if st.sidebar.button("Build PDF Report"):
-            pdf_bytes = None
-            if st.session_state.messages:
-                with st.spinner("Converting chat and artifacts to PDF..."):
-                    pdf_bytes = export_messages_to_pdf(st.session_state.messages)
-                    if pdf_bytes:
-                        pdf_path = persist_pdf_report(pdf_bytes)
-                        st.sidebar.success("Successfully built PDF report!")
-                        if pdf_path and ENABLE_PATH_EXPOSURE:
-                            st.sidebar.caption(f"Saved to: `{pdf_path}`")
-                    else:
-                        st.sidebar.error("Error: Failed to generate PDF report.")
-            else:
-                st.sidebar.warning("No messages to export.")
-            
-            if pdf_bytes:
-                st.sidebar.download_button(
-                    label="📥 Download PDF Report",
-                    data=pdf_bytes,
-                    file_name="pmax_analysis_report.pdf",
-                    mime="application/pdf"
-            )
-
-
+        st.sidebar.caption(
+            "The manifest is stored as `manifest.jsonl` inside this folder."
+        )
 
     if not st.session_state["setup_complete"]:
-        st.markdown("""
-            <style>
-            /* Style the form container */
-            [data-testid="stForm"] {
-                border: 1px solid #333;
-                border-radius: 15px;
-                padding: 30px;
-                background-color: #111; /* Darker background */
-                box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            }
-            
-            /* Center the button and make it 'pop' */
-            div.stFormSubmitButton > button {
-                width: 100%;
-                background-color: #ff4b4b;
-                color: white;
-                border-radius: 10px;
-                height: 3em;
-                font-weight: bold;
-                border: none;
-            }
-            </style>
-            """, unsafe_allow_html=True)
 
         with st.form(key="model_gen_form"):
             st.markdown("### 🛠️ Agents Setup")
             uploaded_log = st.file_uploader(
                 "For **using an agent**, upload an event log:",
                 type=["xes", "gz", "csv"],
-                max_upload_size=5,  # 5 MB limit for the online app
-
+                # max_upload_size=5,  # 5 MB limit for the online app
             )
-            submission_button = st.form_submit_button(label="Start Analysis 🚀")
+            submission_button = st.form_submit_button(label="Start Analysis")
             if submission_button:
                 if "llm_credentials" not in st.session_state:
-                    st.error(body="Please complete the setup on the main page!", icon="⚠️")
+                    st.error(
+                        body="Please complete the setup on the main page!", icon="⚠️"
+                    )
                     return
                 if uploaded_log is None:
                     st.error(body="No file is selected!", icon="⚠️")
                     return
                 try:
                     with st.spinner("Uploading and processing the event log..."):
-                        artifact_session_dir, raw_log_path, log = persist_uploaded_event_log(
-                            uploaded_log
-                        )
+                        (
+                            artifact_session_dir,
+                            raw_log_path,
+                            log,
+                        ) = persist_uploaded_event_log(uploaded_log)
                         if "uploaded_log" not in st.session_state:
                             st.session_state["uploaded_log"] = log
                             st.session_state["uploaded_log_path"] = raw_log_path
-                            st.session_state["artifact_session_dir"] = artifact_session_dir
+                            st.session_state[
+                                "artifact_session_dir"
+                            ] = artifact_session_dir
                             st.session_state["setup_complete"] = True
                             st.rerun()
                 except Exception as e:

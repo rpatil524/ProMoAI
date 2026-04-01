@@ -124,7 +124,9 @@ def _check_code_for_compilation(generated_code: str):
         raise Exception(f"Generated code contains syntax errors: {e}")
 
 
-def code_extraction_report(code_snippet: str, args, valid_artifact_ids: list, long_dfs: list):
+def code_extraction_report(
+    code_snippet: str, args, valid_artifact_ids: list, long_dfs: list
+):
     """
     Extracts code from a given code snippet, removing any markdown formatting.
     """
