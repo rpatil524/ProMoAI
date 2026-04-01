@@ -22,6 +22,7 @@ from promoai.general_utils.constants import ENABLE_PATH_EXPOSURE
 from promoai.general_utils.llm_connection import LLMConnection
 from xhtml2pdf import pisa
 
+
 def get_active_artifact_session_dir() -> str | None:
     agent_state = st.session_state.get("agent_state")
     if agent_state and agent_state.get("artifact_session_dir"):
@@ -236,7 +237,9 @@ def chat(llm_credentials: LLMConnection):
                 artifact_type="user_request",
             )
         display_chat_message("user", prompt)
-        resettable  = "messages" in st.session_state and len(st.session_state["messages"])            
+        resettable = "messages" in st.session_state and len(
+            st.session_state["messages"]
+        )
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         # Add user message to chat history
@@ -284,7 +287,9 @@ def chat(llm_credentials: LLMConnection):
         report = st.session_state.agent_state["final_report"]
         display_chat_message("assistant", report)
         st.session_state.messages.append({"role": "assistant", "content": report})
-        resettable  = "messages" in st.session_state and len(st.session_state["messages"])
+        resettable = "messages" in st.session_state and len(
+            st.session_state["messages"]
+        )
         if st.session_state["resettable"] != resettable:
             st.session_state["resettable"] = resettable
             st.rerun()
@@ -313,7 +318,6 @@ def run_page():
         st.sidebar.caption(
             "The manifest is stored as `manifest.jsonl` inside this folder."
         )
-
 
     if not st.session_state["setup_complete"]:
 

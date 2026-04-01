@@ -22,7 +22,7 @@ AI_MODEL_DEFAULTS = {
     AIProviders.MISTRAL_AI.value: "mistral-large-latest",
     AIProviders.OPENROUTER.value: "openai/gpt-oss-20b",
     AIProviders.COHERE.value: "command-r-plus-08-2024",
-    AIProviders.GROK.value: "grok-3"
+    AIProviders.GROK.value: "grok-3",
 }
 
 DEFAULT_AI_PROVIDER = AIProviders.GOOGLE.value

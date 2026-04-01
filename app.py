@@ -50,7 +50,9 @@ def sidebar_info():
 
     with st.sidebar:
         if st.session_state["resettable"]:
-            st.markdown("<div class='sidebar-header'>Session</div>", unsafe_allow_html=True)
+            st.markdown(
+                "<div class='sidebar-header'>Session</div>", unsafe_allow_html=True
+            )
 
             if st.sidebar.button("🔄 Reset PMAx", use_container_width=True):
                 st.session_state["setup_complete"] = False
@@ -70,9 +72,6 @@ def sidebar_info():
                     del st.session_state["pdf_signature"]
                 st.session_state["resettable"] = False
                 st.rerun()
-
-            
-    
 
         # ---------- RESOURCES (TOP) ----------
         st.markdown(
