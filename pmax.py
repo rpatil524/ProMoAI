@@ -22,7 +22,6 @@ from promoai.general_utils.constants import ENABLE_PATH_EXPOSURE
 from promoai.general_utils.llm_connection import LLMConnection
 from xhtml2pdf import pisa
 
-
 def get_active_artifact_session_dir() -> str | None:
     agent_state = st.session_state.get("agent_state")
     if agent_state and agent_state.get("artifact_session_dir"):
@@ -210,6 +209,11 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
 def chat(llm_credentials: LLMConnection):
     # delete old artifacts from previous sessions to save disk space
     disk_cleanup(ARTIFACTS_ROOT, ttl=1)
+    if "pdf_bytes" not in st.session_state:
+        st.session_state["pdf_bytes"] = None
+    if "pdf_signature" not in st.session_state:
+        st.session_state["pdf_signature"] = 0
+
     for message in st.session_state.messages:
         display_chat_message(message["role"], message["content"])
 
@@ -232,6 +236,7 @@ def chat(llm_credentials: LLMConnection):
                 artifact_type="user_request",
             )
         display_chat_message("user", prompt)
+        resettable  = "messages" in st.session_state and len(st.session_state["messages"])            
         st.session_state.messages.append({"role": "user", "content": prompt})
 
         # Add user message to chat history
@@ -276,10 +281,13 @@ def chat(llm_credentials: LLMConnection):
                 return
             st.session_state.agent_state = updated_state
             status.update(label="Report Generated! ✅", state="complete", expanded=False)
-
         report = st.session_state.agent_state["final_report"]
         display_chat_message("assistant", report)
         st.session_state.messages.append({"role": "assistant", "content": report})
+        resettable  = "messages" in st.session_state and len(st.session_state["messages"])
+        if st.session_state["resettable"] != resettable:
+            st.session_state["resettable"] = resettable
+            st.rerun()
 
 
 def run_page():
@@ -306,42 +314,6 @@ def run_page():
             "The manifest is stored as `manifest.jsonl` inside this folder."
         )
 
-    if st.session_state["setup_complete"]:
-        if st.sidebar.button("🔄 Reset History", use_container_width=True):
-            st.session_state["setup_complete"] = False
-            if "uploaded_log" in st.session_state:
-                del st.session_state["uploaded_log"]
-            if "uploaded_log_path" in st.session_state:
-                del st.session_state["uploaded_log_path"]
-            if "agent_state" in st.session_state:
-                del st.session_state["agent_state"]
-            if "artifact_session_dir" in st.session_state:
-                del st.session_state["artifact_session_dir"]
-            if "messages" in st.session_state:
-                del st.session_state["messages"]
-            st.rerun()
-        if st.sidebar.button("Build PDF Report", use_container_width=True):
-            pdf_bytes = None
-            if st.session_state.messages:
-                with st.spinner("Converting chat and artifacts to PDF..."):
-                    pdf_bytes = export_messages_to_pdf(st.session_state.messages)
-                    if pdf_bytes:
-                        pdf_path = persist_pdf_report(pdf_bytes)
-                        st.sidebar.success("Successfully built PDF report!")
-                        if pdf_path and ENABLE_PATH_EXPOSURE:
-                            st.sidebar.caption(f"Saved to: `{pdf_path}`")
-                    else:
-                        st.sidebar.error("Error: Failed to generate PDF report.")
-            else:
-                st.sidebar.warning("No messages to export.")
-
-            if pdf_bytes:
-                st.sidebar.download_button(
-                    label="📥 Download PDF Report",
-                    data=pdf_bytes,
-                    file_name="pmax_analysis_report.pdf",
-                    mime="application/pdf",
-                )
 
     if not st.session_state["setup_complete"]:
 

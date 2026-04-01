@@ -45,8 +45,34 @@ def run_app():
 
 
 def sidebar_info():
+    if "resettable" not in st.session_state:
+        st.session_state["resettable"] = False
 
     with st.sidebar:
+        if st.session_state["resettable"]:
+            st.markdown("<div class='sidebar-header'>Session</div>", unsafe_allow_html=True)
+
+            if st.sidebar.button("🔄 Reset PMAx", use_container_width=True):
+                st.session_state["setup_complete"] = False
+                if "uploaded_log" in st.session_state:
+                    del st.session_state["uploaded_log"]
+                if "uploaded_log_path" in st.session_state:
+                    del st.session_state["uploaded_log_path"]
+                if "agent_state" in st.session_state:
+                    del st.session_state["agent_state"]
+                if "artifact_session_dir" in st.session_state:
+                    del st.session_state["artifact_session_dir"]
+                if "messages" in st.session_state:
+                    del st.session_state["messages"]
+                if "pdf_bytes" in st.session_state:
+                    del st.session_state["pdf_bytes"]
+                if "pdf_signature" in st.session_state:
+                    del st.session_state["pdf_signature"]
+                st.session_state["resettable"] = False
+                st.rerun()
+
+            
+    
 
         # ---------- RESOURCES (TOP) ----------
         st.markdown(
