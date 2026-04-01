@@ -14,15 +14,15 @@ class AIProviders(Enum):
 
 
 AI_MODEL_DEFAULTS = {
-    AIProviders.GOOGLE.value: "gemini-3-flash",
+    AIProviders.GOOGLE.value: "gemini-3-flash-preview",
     AIProviders.OPENAI.value: "gpt-5.4",
     AIProviders.DEEPSEEK.value: "deepseek-reasoner",
     AIProviders.ANTHROPIC.value: "claude-sonnet-4-20250514",
     AIProviders.DEEPINFRA.value: "openai/gpt-oss-20b",
     AIProviders.MISTRAL_AI.value: "mistral-large-latest",
     AIProviders.OPENROUTER.value: "openai/gpt-oss-20b",
-    AIProviders.COHERE.value: "command-r-plus",
-    AIProviders.GROK.value: "grok-3",
+    AIProviders.COHERE.value: "command-r-plus-08-2024",
+    AIProviders.GROK.value: "grok-3"
 }
 
 DEFAULT_AI_PROVIDER = AIProviders.GOOGLE.value
