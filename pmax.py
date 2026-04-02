@@ -260,14 +260,7 @@ def chat(llm_credentials: LLMConnection):
             st.session_state.agent_state["user_request"].append(prompt)
         assistant_placeholder = st.empty()
 
-        with st.status(
-                "I am processing your request...", state="running", expanded=True
-        ) as status:
-            status.update(
-                label="The engineer is analyzing the request and preparing code...",
-                state="running",
-                expanded=True,
-            )
+        with st.spinner("Processing your request..."):
             try:
                 st.session_state.agent_state, _, code = engineer_node(
                     st.session_state.agent_state, llm_credentials
@@ -276,7 +269,6 @@ def chat(llm_credentials: LLMConnection):
                 st.error(f"Error during calling the Engineer: {e}")
                 return
 
-            # Show the same assistant bubble immediately with the generated code
             assistant_content = [
                 {
                     "type": "code",
@@ -294,11 +286,6 @@ def chat(llm_credentials: LLMConnection):
             with assistant_placeholder.container():
                 display_chat_message("assistant", assistant_content)
 
-            status.update(
-                label="The analyst is generating the report based on the generated code and the analysis artifacts...",
-                state="running",
-            )
-
             try:
                 updated_state = analyst_node(
                     st.session_state.agent_state, llm_credentials
@@ -308,7 +295,8 @@ def chat(llm_credentials: LLMConnection):
                 return
 
             st.session_state.agent_state = updated_state
-            status.update(label="Report Generated! ✅", state="complete", expanded=False)
+
+        st.success("Report Generated! ✅")
 
         report = st.session_state.agent_state["final_report"]
 
