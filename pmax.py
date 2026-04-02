@@ -296,8 +296,6 @@ def chat(llm_credentials: LLMConnection):
 
             st.session_state.agent_state = updated_state
 
-        st.success("Report Generated! ✅")
-
         report = st.session_state.agent_state["final_report"]
 
         if isinstance(report, list):
