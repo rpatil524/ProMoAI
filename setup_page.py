@@ -2,6 +2,7 @@ import streamlit as st
 from promoai.general_utils.ai_providers import (
     AI_HELP_DEFAULTS,
     AI_MODEL_DEFAULTS,
+    AIProviders,
     MAIN_HELP,
 )
 
@@ -42,13 +43,24 @@ def run_page():
             api_key = st.text_input(
                 "API Key", type="password", placeholder="my-precious-api-key"
             )
+        azure_endpoint = None
 
+        if provider == AIProviders.AZURE.value:
+            azure_endpoint = st.text_input(
+                "Azure Endpoint",
+                key="azure_endpoint",
+                placeholder="https://your-resource.openai.azure.com/",
+            )
         if st.button("Save Credentials", type="primary", use_container_width=True):
             if not api_key:
                 st.error("Please enter an API key.")
             else:
+                args = {"END_POINT": azure_endpoint}
                 st.session_state["llm_credentials"] = LLMConnection(
-                    api_key=api_key, llm_name=ai_model_name, ai_provider=provider
+                    api_key=api_key,
+                    llm_name=ai_model_name,
+                    ai_provider=provider,
+                    args=args,
                 )
                 st.success(
                     "Credentials saved! You can now navigate to ProMoAI or PMAx."

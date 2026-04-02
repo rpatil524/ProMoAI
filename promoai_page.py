@@ -5,6 +5,7 @@ from pathlib import Path
 
 import promoai
 import streamlit as st
+from constants import MAX_FILE_SIZE
 from pm4py import read_bpmn, read_pnml
 
 from pm4py.objects.bpmn.exporter.variants.etree import get_xml_string
@@ -85,6 +86,7 @@ def render_submission_form(input_type):
             "Upload Model File",
             type=["bpmn", "pnml"],
             key="model_uploaded_file",
+            max_upload_size=MAX_FILE_SIZE,
         )
         submit_label = "Analyze"
 
@@ -97,6 +99,7 @@ def render_submission_form(input_type):
             "Upload Event Log",
             type=["xes", "gz", "csv"],
             key="data_uploaded_log",
+            max_upload_size=MAX_FILE_SIZE,
         )
 
         # Use columns inside the form for settings
@@ -122,6 +125,7 @@ def render_submission_form(input_type):
                 api_key=st.session_state["llm_credentials"].api_key,
                 ai_model=st.session_state["llm_credentials"].llm_name,
                 ai_provider=st.session_state["llm_credentials"].ai_provider,
+                llm_args=st.session_state["llm_credentials"].args,
             )
 
             st.session_state["model_gen"] = process_model

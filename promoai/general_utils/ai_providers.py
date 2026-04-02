@@ -11,6 +11,7 @@ class AIProviders(Enum):
     OPENROUTER = "OpenRouter"
     COHERE = "Cohere"
     GROK = "Grok"
+    AZURE = "Azure"
 
 
 AI_MODEL_DEFAULTS = {
@@ -23,6 +24,7 @@ AI_MODEL_DEFAULTS = {
     AIProviders.OPENROUTER.value: "openai/gpt-oss-20b",
     AIProviders.COHERE.value: "command-r-plus-08-2024",
     AIProviders.GROK.value: "grok-3",
+    AIProviders.AZURE.value: "very-secret-llm",
 }
 
 DEFAULT_AI_PROVIDER = AIProviders.GOOGLE.value
@@ -37,6 +39,7 @@ AI_HELP_DEFAULTS = {
     AIProviders.OPENROUTER.value: "Enter an OpenRouter model name. You can get an OpenRouter API key and check the latest models under: https://openrouter.ai/models. Note that free models are available, but you may need to sign up for an account.",
     AIProviders.COHERE.value: "Enter a Cohere model name. You can get a Cohere API key and check the latest models under: https://cohere.com/docs/models. They further provide free trial keys.",
     AIProviders.GROK.value: "Enter a Grok model name. You can get a Grok API key and check the latest models under: https://x.ai/api.",
+    AIProviders.AZURE.value: "Enter your Azure OpenAI API key, resource endpoint URL, deployment name, and API version.",
 }
 
 MAIN_HELP = (

@@ -525,6 +525,8 @@ def query_llm(
         use_responses_api_openai = False
         if ai_provider == AIProviders.DEEPINFRA.value:
             api_url = "https://api.deepinfra.com/v1/openai"
+        elif ai_provider == AIProviders.AZURE.value:
+            api_url = llm_args["END_POINT"].rstrip("/")
         elif ai_provider == AIProviders.OPENAI.value:
             api_url = "https://api.openai.com/v1"
             use_responses_api_openai = True
@@ -540,6 +542,8 @@ def query_llm(
             raise UnsupportedProviderError(
                 _user_message("unsupported"), retryable=False
             )
+        llm_args_to_pass = llm_args.copy()
+        llm_args_to_pass.pop("END_POINT", None)
 
         return generate_response_with_history(
             conversation,
@@ -548,7 +552,7 @@ def query_llm(
             ai_provider,
             api_url,
             use_responses_api=use_responses_api_openai,
-            llm_args=llm_args,
+            llm_args=llm_args_to_pass,
             trace_session_dir=trace_session_dir,
         )
 

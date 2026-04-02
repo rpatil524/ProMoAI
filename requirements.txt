@@ -17,3 +17,4 @@ seaborn
 streamlit==1.55.0
 tabulate
 xhtml2pdf
+openai==2.30.0
