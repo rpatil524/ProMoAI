@@ -31,6 +31,7 @@ def get_active_artifact_session_dir() -> str | None:
     return st.session_state.get("artifact_session_dir")
 
 
+
 def persist_uploaded_event_log(uploaded_file) -> tuple[str, str, pd.DataFrame]:
     artifact_session_dir = create_analysis_session("pmax")
     file_bytes = uploaded_file.read()
@@ -164,10 +165,9 @@ def export_messages_to_pdf(messages) -> bytes:
 
 
 def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
-    """Renders either a simple string or a structured artifact report."""
+    """Renders either a simple string or structured chat blocks."""
     with st.chat_message(role):
         if isinstance(content, list):
-            # Loop through the list of blocks
             for block in content:
                 b_type = block.get("type")
                 b_val = block.get("content")
@@ -175,18 +175,23 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
                 if b_type == "text":
                     st.markdown(b_val)
 
+                elif b_type == "code":
+                    label = block.get("label", "Generated code")
+                    language = block.get("language", "python")
+                    expanded = block.get("expanded", False)
+                    with st.expander(label, expanded=expanded):
+                        st.code(b_val, language=language)
+
                 elif b_type == "artifact":
-                    st.markdown(f"**Artifact:**")
+                    st.markdown("**Artifact:**")
                     if not os.path.exists(b_val):
                         st.error(f"File missing: {b_val}")
                         continue
 
-                    # Logic for Images vs Dataframes
                     if b_val.lower().endswith((".png", ".jpg", ".jpeg", ".svg")):
                         st.image(b_val, width="stretch")
                     elif b_val.lower().endswith(".csv"):
                         df = pd.read_csv(b_val)
-                        # show only the first 30 rows
                         if len(df) > 30:
                             st.markdown(
                                 "<p><i>(Showing first 30 rows of data)</i></p>",
@@ -196,7 +201,6 @@ def display_chat_message(role: str, content: Union[str, List[Dict[str, str]]]):
                         st.dataframe(df, use_container_width=True)
                     elif b_val.lower().endswith(".parquet"):
                         df = pd.read_parquet(b_val)
-                        # show only the first 30 rows
                         if len(df) > 30:
                             st.markdown(
                                 "<p><i>(Showing first 30 rows of data)</i></p>",
@@ -254,14 +258,9 @@ def chat(llm_credentials: LLMConnection):
         else:
             # Add the user request to the agent state
             st.session_state.agent_state["user_request"].append(prompt)
-        with st.status(
-            "I am processing your request...", state="running", expanded=True
-        ) as status:
-            status.update(
-                label="The engineer is analyzing the request and preparing code...",
-                state="running",
-                expanded=True,
-            )
+        assistant_placeholder = st.empty()
+
+        with st.spinner("Processing your request..."):
             try:
                 st.session_state.agent_state, _, code = engineer_node(
                     st.session_state.agent_state, llm_credentials
@@ -269,13 +268,24 @@ def chat(llm_credentials: LLMConnection):
             except Exception as e:
                 st.error(f"Error during calling the Engineer: {e}")
                 return
-            st.write("Code generated! Executing the code and generating the report...")
-            st.write(f"Executing the following code:\n```python\n{code}\n```")
-            # Add the generated code to the status
-            status.update(
-                label="The analyst is generating the report based on the generated code and the analysis artifacts...",
-                state="running",
-            )
+
+            assistant_content = [
+                {
+                    "type": "code",
+                    "content": code,
+                    "language": "python",
+                    "label": "Generated code",
+                    "expanded": False,
+                },
+                {
+                    "type": "text",
+                    "content": "_Generating report..._",
+                },
+            ]
+
+            with assistant_placeholder.container():
+                display_chat_message("assistant", assistant_content)
+
             try:
                 updated_state = analyst_node(
                     st.session_state.agent_state, llm_credentials
@@ -283,11 +293,43 @@ def chat(llm_credentials: LLMConnection):
             except Exception as e:
                 st.error(f"Error during calling the Analyst: {e}")
                 return
+
             st.session_state.agent_state = updated_state
-            status.update(label="Report Generated! ✅", state="complete", expanded=False)
+
         report = st.session_state.agent_state["final_report"]
-        display_chat_message("assistant", report)
-        st.session_state.messages.append({"role": "assistant", "content": report})
+
+        if isinstance(report, list):
+            assistant_content = [
+                {
+                    "type": "code",
+                    "content": code,
+                    "language": "python",
+                    "label": "Generated code",
+                    "expanded": False,
+                },
+                *report,
+            ]
+        else:
+            assistant_content = [
+                {
+                    "type": "code",
+                    "content": code,
+                    "language": "python",
+                    "label": "Generated code",
+                    "expanded": False,
+                },
+                {
+                    "type": "text",
+                    "content": report,
+                },
+            ]
+
+        # Replace the same live bubble with the final content
+        with assistant_placeholder.container():
+            display_chat_message("assistant", assistant_content)
+
+        # Persist only the final assistant message
+        st.session_state.messages.append({"role": "assistant", "content": assistant_content})
         resettable = "messages" in st.session_state and len(
             st.session_state["messages"]
         )
