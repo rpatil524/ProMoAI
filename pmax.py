@@ -6,6 +6,7 @@ import markdown
 import pandas as pd
 import pm4py
 import streamlit as st
+from constants import MAX_FILE_SIZE
 from powl import import_event_log
 
 from promoai.agents.agents import analyst_node, engineer_node, init_state
@@ -326,7 +327,7 @@ def run_page():
             uploaded_log = st.file_uploader(
                 "For **using an agent**, upload an event log:",
                 type=["xes", "gz", "csv"],
-                # max_upload_size=5,  # 5 MB limit for the online app
+                max_upload_size=MAX_FILE_SIZE,
             )
             submission_button = st.form_submit_button(label="Start Analysis")
             if submission_button:
