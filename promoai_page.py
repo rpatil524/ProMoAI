@@ -125,6 +125,7 @@ def render_submission_form(input_type):
                 api_key=st.session_state["llm_credentials"].api_key,
                 ai_model=st.session_state["llm_credentials"].llm_name,
                 ai_provider=st.session_state["llm_credentials"].ai_provider,
+                llm_args=st.session_state["llm_credentials"].args,
             )
 
             st.session_state["model_gen"] = process_model
