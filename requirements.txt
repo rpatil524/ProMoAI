@@ -10,11 +10,12 @@ pandas
 pillow
 plotly
 pm4py
-powl>=2.3.3
+powl>=2.3.4
 requests
 rustxes
 seaborn
-streamlit==1.55.0
+streamlit==1.56.0
 tabulate
 xhtml2pdf
 openai==2.30.0
+6

@@ -31,7 +31,6 @@ def get_active_artifact_session_dir() -> str | None:
     return st.session_state.get("artifact_session_dir")
 
 
-
 def persist_uploaded_event_log(uploaded_file) -> tuple[str, str, pd.DataFrame]:
     artifact_session_dir = create_analysis_session("pmax")
     file_bytes = uploaded_file.read()
@@ -329,7 +328,9 @@ def chat(llm_credentials: LLMConnection):
             display_chat_message("assistant", assistant_content)
 
         # Persist only the final assistant message
-        st.session_state.messages.append({"role": "assistant", "content": assistant_content})
+        st.session_state.messages.append(
+            {"role": "assistant", "content": assistant_content}
+        )
         resettable = "messages" in st.session_state and len(
             st.session_state["messages"]
         )

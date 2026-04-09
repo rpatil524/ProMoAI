@@ -1,25 +1,20 @@
-from typing import List as TList, Union
+from typing import List as TList
 
-from powl.objects.obj import POWL, SilentTransition, StrictPartialOrder, Transition
+from powl.objects.tagged_powl import Activity, PartialOrder, TaggedPOWL
 
 
-def validate_resource_structure(powl: POWL):
+def validate_resource_structure(powl: TaggedPOWL):
     identified_pools = set()
     identified_lanes = set()
     children_to_check = [powl]
     while children_to_check:
         current_node = children_to_check.pop()
-        if hasattr(current_node, "pool"):
+        if hasattr(current_node, "organization"):
             identified_pools.add(current_node.pool)
-        if hasattr(current_node, "lane"):
+        if hasattr(current_node, "role"):
             identified_lanes.add(current_node.lane)
-        if hasattr(current_node, "children"):
-            children_to_check.extend(current_node.children)
-        try:
-            children = current_node.get_children()
-            children_to_check.extend(children)
-        except AttributeError:
-            pass
+        if hasattr(current_node, "nodes"):
+            children_to_check.extend(list(current_node.nodes))
     if None in identified_pools and len(identified_pools) > 1:
         raise Exception(
             "Invalid resource structure: None pool used alongside identified pools."
@@ -30,43 +25,36 @@ def validate_resource_structure(powl: POWL):
         )
 
 
-def validate_partial_orders_with_missing_transitive_edges(powl: POWL):
-    if isinstance(powl, StrictPartialOrder):
-        if not powl.order.is_irreflexive():
-            raise Exception("The irreflexivity of the partial order is violated!")
-        if not powl.order.is_transitive():
-            powl.order.add_transitive_edges()
-            if not powl.order.is_irreflexive():
-                raise Exception(
-                    "The transitive closure of the provided relation violates irreflexivity!"
-                )
-    if hasattr(powl, "children"):
-        for child in powl.children:
+def validate_partial_orders_with_missing_transitive_edges(powl: TaggedPOWL):
+    if isinstance(powl, PartialOrder):
+        if not powl.validate():
+            raise Exception("A partial order must be a DAG!")
+    if hasattr(powl, "_g"):
+        for child in powl._g.nodes:
             validate_partial_orders_with_missing_transitive_edges(child)
 
 
 def validate_unique_transitions(
-    powl: POWL,
-) -> TList[Union[Transition, SilentTransition]]:
+    powl: TaggedPOWL,
+) -> TList[Activity]:
     def _find_duplicates(lst):
-        counts = {}
+        seen_els = []
         duplicates = []
         for item in lst:
-            if item in counts:
-                counts[item] += 1
-                if counts[item] == 2:
-                    duplicates.append(item)
+            if item not in seen_els:
+                seen_els.append(item)
             else:
-                counts[item] = 1
+                if item not in duplicates:
+                    duplicates.append(item)
         return duplicates
 
-    def _collect_leaves(node: POWL):
-        if isinstance(node, Transition) or isinstance(node, SilentTransition):
+    def _collect_leaves(node: TaggedPOWL):
+        if isinstance(node, Activity):
             return [node]
 
-        elif hasattr(node, "children"):
+        elif hasattr(node, "_g"):
             leaves = []
-            for child in node.children:
+            for child in node._g.nodes:
                 leaves = leaves + _collect_leaves(child)
             return leaves
         else:
