@@ -172,11 +172,11 @@ class ModelGenerator:
                     deps.append((children[source], children[target]))
         if len(start_nodes) == 0:
             raise Exception(
-                "No start nodes are provided in the partial order, make sure to include them using (None, node)"
+                "No start nodes are provided in the decision graph, make sure to include them using (None, node)"
             )
         if len(end_nodes) == 0:
             raise Exception(
-                "No end nodes are provided in the partial order, make sure to include them using (node, None)"
+                "No end nodes are provided in the decision graph, make sure to include them using (node, None)"
             )
 
         min_freq = 0 if empty_path else 1
@@ -188,6 +188,12 @@ class ModelGenerator:
             end_nodes=end_nodes,
             min_freq=min_freq,
         )
+        try:
+            order.validate_connectivity()
+        except Exception:
+            raise Exception(
+                "Not all nodes in the decision graph are on the path from start to end."
+            )
         if self.nested_decision_graphs:
             pass
         else:
