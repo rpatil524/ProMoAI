@@ -2,7 +2,7 @@ import pm4py
 from pm4py.util import constants
 from powl import convert_to_bpmn, convert_to_petri_net, view as view_powl
 
-from powl.objects.obj import POWL
+from powl.objects.tagged_powl import TaggedPOWL
 
 from promoai.general_utils.artifact_store import create_analysis_session
 from promoai.model_generation import code_extraction
@@ -50,7 +50,7 @@ class LLMProcessModelGenerator:
         return cls(process_model, conversation, llm_args=effective_llm_args)
 
     @classmethod
-    def from_powl(cls, powl_model: POWL):
+    def from_powl(cls, powl_model: TaggedPOWL):
         init_conversation = create_conversation(None, resource_aware_discovery=False)
         conversation = list(init_conversation)
         conversation.append(
@@ -102,7 +102,6 @@ class LLMProcessModelGenerator:
             llm_args=effective_llm_args or None,
         )
         self.llm_args = effective_llm_args
-        self.process_model = self.process_model.simplify()
 
     def view_bpmn(self, image_format: str = "svg"):
         bpmn_model = self.get_bpmn()

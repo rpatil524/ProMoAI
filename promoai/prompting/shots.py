@@ -1069,7 +1069,7 @@ if __name__ == "__main__":
     from pm4py import view_petri_net
     from powl import convert_to_petri_net, view
 
-    model = m9().simplify()
+    model = m9()
     view(model)
     pn, im, fm = convert_to_petri_net(model)
     view_petri_net(pn, im, fm, format="SVG")

@@ -1,6 +1,6 @@
 from typing import Any, List
 
-from powl.objects.obj import POWL
+from powl.objects.tagged_powl.base import TaggedPOWL
 
 from promoai.general_utils.llm_connection import generate_result_with_error_handling
 from promoai.model_generation.code_extraction import (
@@ -15,13 +15,12 @@ from promoai.model_generation.validation import (
 
 def extract_model_from_response(
     response: str, auto_duplicate: False
-) -> tuple[str, POWL]:
+) -> tuple[str, TaggedPOWL]:
     if auto_duplicate:
         response = response.replace("ModelGenerator()", "ModelGenerator(True, True)")
     extracted_code = extract_final_python_code(response)
     variable_name = "final_model"
     result = execute_code_and_get_variable(extracted_code, variable_name)
-    result = result.simplify()
     # validate_unique_transitions(result)
     validate_partial_orders_with_missing_transitive_edges(result)
     validate_resource_structure(result)
@@ -36,7 +35,7 @@ def generate_model(
     llm_args: dict = None,
     max_iterations=10,
     additional_iterations=5,
-) -> tuple[str, POWL, list[Any]]:
+) -> tuple[str, TaggedPOWL, list[Any]]:
     return generate_result_with_error_handling(
         conversation=conversation,
         extraction_function=extract_model_from_response,

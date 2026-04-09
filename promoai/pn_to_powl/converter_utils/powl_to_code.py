@@ -1,14 +1,6 @@
-from pm4py.objects.process_tree.obj import Operator
-from powl.objects.BinaryRelation import BinaryRelation
-from powl.objects.obj import (
-    DecisionGraph,
-    EndNode,
-    OperatorPOWL,
-    SilentTransition,
-    StartNode,
-    StrictPartialOrder,
-    Transition,
-)
+from powl.objects.tagged_powl import Activity, ChoiceGraph, PartialOrder
+
+from powl.objects.tagged_powl.choice_graph import _ChoiceGraphEnd, _ChoiceGraphStart
 
 from promoai.prompting.prompt_engineering import import_statement
 
@@ -33,63 +25,47 @@ def translate_powl_to_code(powl_obj):
         return var_name
 
     def process_powl(powl):
-        if isinstance(powl, Transition):
+        if isinstance(powl, Activity):
             var_name = get_new_var_name()
-            if isinstance(powl, SilentTransition):
+            if powl.label is None:
                 code_lines.append(f"{var_name} = None")
             else:
                 label = powl.label
-                if powl._organization is not None and powl._role is not None:
+                if powl.organization is not None and powl.role is not None:
                     code_lines.append(
-                        f"{var_name} = gen.activity('{label}', pool='{powl._organization}',  lane='{powl._role}')"
+                        f"{var_name} = gen.activity('{label}', pool='{powl.organization}',  lane='{powl.role}')"
                     )
                 else:
                     code_lines.append(f"{var_name} = gen.activity('{label}')")
             return var_name
 
-        elif isinstance(powl, StartNode) or isinstance(powl, EndNode):
+        elif isinstance(powl, _ChoiceGraphEnd) or isinstance(powl, _ChoiceGraphStart):
             return None
 
-        elif isinstance(powl, OperatorPOWL):
-            operator = powl.operator
-            children = powl.children
-            if operator == Operator.XOR:
-                rel = BinaryRelation(children)
-                graph = DecisionGraph(rel, children, children, False)
-                graph = graph.reduce_silent_transitions()
-                return process_powl(graph)
-            elif operator == Operator.LOOP:
-                rel = BinaryRelation(children)
-                do = children[0]
-                redo = children[1]
-                rel.add_edge(do, redo)
-                rel.add_edge(redo, do)
-                graph = DecisionGraph(rel, [do], [do], False)
-                graph = graph.reduce_silent_transitions()
-                return process_powl(graph)
-            else:
-                raise Exception("Unknown operator! This should not be possible!")
-
-        elif isinstance(powl, StrictPartialOrder) or isinstance(powl, DecisionGraph):
-            nodes = powl.order.nodes
-            if isinstance(powl, StrictPartialOrder):
-                order = powl.order.get_transitive_reduction()
-            elif isinstance(powl, DecisionGraph):
-                order = powl.order
+        elif isinstance(powl, PartialOrder) or isinstance(powl, ChoiceGraph):
+            nodes = powl._g.nodes
+            if isinstance(powl, PartialOrder):
+                order = powl.transitive_reduction()
+            elif isinstance(powl, ChoiceGraph):
+                order = powl
             else:
                 raise Exception("Unknown POWL object! This should not be possible!")
             node_var_map = {node: process_powl(node) for node in nodes}
             dependencies = []
             nodes_in_edges = set()
+            # to make it robust against PartialOrders and ChoiceGraphs
+            edge_checker = (
+                order.is_edge if hasattr(order, "is_edge") else order.has_edge
+            )
             for source in nodes:
                 for target in nodes:
                     source_var = node_var_map[source]
                     target_var = node_var_map[target]
-                    if order.is_edge(source, target):
+                    if edge_checker(source, target):
                         dependencies.append(f"({source_var}, {target_var})")
                         nodes_in_edges.update([source, target])
 
-            if isinstance(powl, StrictPartialOrder):
+            if isinstance(powl, PartialOrder):
                 # Include nodes not in any edge as singleton tuples
                 for node in nodes:
                     if node not in nodes_in_edges:
@@ -100,7 +76,7 @@ def translate_powl_to_code(powl_obj):
             var_name = get_new_var_name()
             code_lines.append(
                 f"{var_name} = gen.partial_order(dependencies=[{dep_str}])"
-            ) if isinstance(powl, StrictPartialOrder) else code_lines.append(
+            ) if isinstance(powl, PartialOrder) else code_lines.append(
                 f"{var_name} = gen.decision_graph(dependencies=[{dep_str}])"
             )
             return var_name
