@@ -192,7 +192,6 @@ def render_submission_form(input_type):
                     st.session_state["model_gen"] = process_model
                     st.session_state["feedback"] = []
                 except Exception as e:
-                    print(e)
                     st.error(
                         body=f"Please upload a semi-block-structured model! The error message: {e}",
                         icon="⚠️",
