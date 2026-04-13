@@ -23,6 +23,11 @@ class PM4PYWrapper:
     def __init__(self, state: ProcessState):
         # ==== Load event log ==== #
         self.event_log = state["event_log"]
+        # used to detect potential leaks
+        self._raw_column_fingerprints = {
+            hash(tuple(sorted(self.event_log[col].astype(str).unique()))): col
+            for col in self.event_log.columns
+        }
         # ========================= #
         self.pnet = None
         self.process_model = state.get("discovered_model", None)
@@ -96,6 +101,17 @@ class PM4PYWrapper:
             raise ValueError(
                 "Description for the saved dataframe cannot be empty. Please provide a meaningful description to give context to the saved dataframe."
             )
+        # to make sure that data isn't leaked
+        potential_column_leak = len(df) == len(self.event_log)
+        if potential_column_leak:
+            for col in df.columns:
+                artifact_col_sig = hash(tuple(sorted(df[col].astype(str).unique())))
+                if artifact_col_sig in self._raw_column_fingerprints:
+                    raise Exception(
+                        f"Artifact {description} contains raw event log content in {col}. \
+                                    Avoid saving raw data as artifacts, instead, focus on the analysis."
+                    )
+
         data_preview = transform_dataframe_for_llms(df)
         file_path = create_managed_path(
             self.state["artifact_session_dir"],
