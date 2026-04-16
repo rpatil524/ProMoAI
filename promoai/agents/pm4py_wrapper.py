@@ -23,6 +23,11 @@ class PM4PYWrapper:
     def __init__(self, state: ProcessState):
         # ==== Load event log ==== #
         self.event_log = state["event_log"]
+        # used to detect potential leaks
+        self._raw_column_fingerprints = {
+            hash(tuple(sorted(self.event_log[col].astype(str).unique()))): col
+            for col in self.event_log.columns
+        }
         # ========================= #
         self.pnet = None
         self.process_model = state.get("discovered_model", None)
@@ -59,6 +64,7 @@ class PM4PYWrapper:
             - api.save_dataframe(df, description) -> Saves a given dataframe to a specified file path with a description for context. \n
                 Use this to pass down any kind of dataframes, including intermediate data manipulations or results of process mining algorithms. \n
                 There is NO need to pass down the final event log with this method, use the return variable `final_event_log` for that. \n
+                Note that saving whole columns of the event log or the entire event log will trigger an error, **focus on the requested analysis** when saving dataframes.
         \n
         RULES: \n
         - You can use only the provided methods, as well as matplotlib, seaborn, plotly, numpy and pandas for any additional data manipulation or visualization needs. \n
@@ -96,6 +102,17 @@ class PM4PYWrapper:
             raise ValueError(
                 "Description for the saved dataframe cannot be empty. Please provide a meaningful description to give context to the saved dataframe."
             )
+        # to make sure that data isn't leaked
+        potential_column_leak = len(df) == len(self.event_log)
+        if potential_column_leak:
+            for col in df.columns:
+                artifact_col_sig = hash(tuple(sorted(df[col].astype(str).unique())))
+                if artifact_col_sig in self._raw_column_fingerprints:
+                    raise Exception(
+                        f"Artifact {description} contains raw event log content in {col}. \
+                                    Avoid saving raw data as artifacts, instead, focus on the analysis."
+                    )
+
         data_preview = transform_dataframe_for_llms(df)
         file_path = create_managed_path(
             self.state["artifact_session_dir"],
