@@ -64,6 +64,7 @@ class PM4PYWrapper:
             - api.save_dataframe(df, description) -> Saves a given dataframe to a specified file path with a description for context. \n
                 Use this to pass down any kind of dataframes, including intermediate data manipulations or results of process mining algorithms. \n
                 There is NO need to pass down the final event log with this method, use the return variable `final_event_log` for that. \n
+                Note that saving whole columns of the event log or the entire event log will trigger an error, **focus on the requested analysis** when saving dataframes.
         \n
         RULES: \n
         - You can use only the provided methods, as well as matplotlib, seaborn, plotly, numpy and pandas for any additional data manipulation or visualization needs. \n
