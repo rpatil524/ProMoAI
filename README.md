@@ -1,4 +1,4 @@
-![ProMoAI logo](https://i.imgur.com/8ks9Es8.png)
+![ProMoAI logo](https://i.imgur.com/cu5OtpK.png)
 
 # ProMoAI & PMAx
 
