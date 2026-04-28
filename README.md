@@ -1,3 +1,5 @@
+![ProMoAI logo](https://i.imgur.com/8ks9Es8.png)
+
 # ProMoAI & PMAx
 
 **ProMoAI** is an AI-powered suite for Process Mining that leverages Large Language Models (LLMs) to bridge the gap between natural language and technical process analysis. The framework now includes **PMAx**, an autonomous agentic system for data-driven insights.
