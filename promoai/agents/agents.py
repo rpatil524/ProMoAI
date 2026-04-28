@@ -1,6 +1,6 @@
 import copy
 from functools import partial
-from typing import Tuple
+from typing import List, Tuple
 
 import pandas as pd
 import pm4py
@@ -25,6 +25,13 @@ Please update the model to fix the error. Make sure" \
 
 ERROR_MESSAGE_CODE_GENERATION_ANALYST = """
 Please update the model to fix the error. Make sure to save the final report in the variable 'final_report' as a list of dictionaries with keys 'type' and 'content', where 'type' can be either 'text' or 'artifact'. For artifacts, the content should be the key referencing the artifact (e.g., 'artifact_0') that you want to include in the report."""
+
+
+def snapshot_state(
+    state: ProcessState, previous_states: List[ProcessState]
+) -> List[ProcessState]:
+    previous_states.append(copy.deepcopy(state))
+    return previous_states
 
 
 def _persist_generated_code(
