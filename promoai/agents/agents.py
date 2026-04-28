@@ -5,7 +5,7 @@ from typing import Tuple
 import pandas as pd
 import pm4py
 
-from promoai.agents.pm4py_wrapper import PM4PYWrapper
+from promoai.agents.pm4py_wrapper import LLMClient, PM4PYWrapper
 from promoai.agents.state import ProcessState
 from promoai.agents.utils import code_extraction_report
 from promoai.general_utils.artifact_store import (
@@ -104,7 +104,8 @@ def engineer_node(
 ) -> Tuple[ProcessState, str, str]:
     # Initial state
     # 1. Construct Prompt
-    api = PM4PYWrapper(state)
+    client = LLMClient(LLMCredentials)
+    api = PM4PYWrapper(state, client)
     api_summary = api.get_API_summary()
 
     msg = f"""

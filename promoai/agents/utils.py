@@ -84,6 +84,7 @@ def _check_whitelisted_libraries(generated_code: str):
         "promoai",
         "matplotlib",
         "seaborn",
+        "sklearn",
         "numpy",
         "plotly",
         "datetime",
