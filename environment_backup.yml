@@ -15,6 +15,7 @@ dependencies:
       - matplotlib
       - networkx
       - numpy
+      - scikit-learn
       - pandas
       - pillow
       - plotly

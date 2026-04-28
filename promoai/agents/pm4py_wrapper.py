@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Tuple
+from typing import Any, Tuple, Union
 
 import pandas as pd
 import pm4py
@@ -8,6 +8,7 @@ import powl
 from pm4py.objects import petri_net as PNet
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from powl import convert_to_petri_net
+from powl.conversion.to_powl.from_pn.converter import convert_workflow_net_to_powl
 
 import promoai.agents.utils as utils
 from promoai.agents.state import ProcessState
@@ -16,11 +17,44 @@ from promoai.general_utils.artifact_store import (
     append_manifest_entry,
     create_managed_path,
 )
+from promoai.general_utils.llm_connection import LLMConnection
 from promoai.model_generation.code_extraction import execute_code_and_get_variable
+from promoai.model_generation.llm_model_generator import LLMProcessModelGenerator
+
+
+class LLMClient:
+    def __init__(self, credentials: LLMConnection):
+        self.credentials = credentials
+
+    def from_description(self, process_description):
+        api_key = self.credentials.api_key
+        llm = self.credentials.llm_name
+        provider = self.credentials.ai_provider
+        args = self.credentials.args
+        return LLMProcessModelGenerator.from_description(
+            process_description, api_key, llm, provider, False, args
+        )
+
+    def from_pnet(self, pnet: Tuple[Any, Any, Any], description: str):
+        powl = convert_workflow_net_to_powl(pnet[0])
+        api_key = self.credentials.api_key
+        llm = self.credentials.llm_name
+        provider = self.credentials.ai_provider
+        args = self.credentials.args
+        _, pnet = LLMProcessModelGenerator(None, [], None).edit_code(
+            feedback=description,
+            powl_model=powl,
+            api_key=api_key,
+            ai_model=llm,
+            ai_provider=provider,
+            llm_args=args,
+        )
+
+        return pnet
 
 
 class PM4PYWrapper:
-    def __init__(self, state: ProcessState):
+    def __init__(self, state: ProcessState, client: Union[LLMClient, None]):
         # ==== Load event log ==== #
         self.event_log = state["event_log"]
         # used to detect potential leaks
@@ -30,8 +64,9 @@ class PM4PYWrapper:
         }
         # ========================= #
         self.pnet = None
-        self.process_model = state.get("discovered_model", None)
+        self.process_model = state.get("process_model", None)
         self.state = state
+        self.client = client
 
     @staticmethod
     def get_API_summary() -> str:
@@ -54,6 +89,8 @@ class PM4PYWrapper:
            - api.discover_process_model() -> returns nothing, updates internal state with a discovered Petri net model based on the event log and saves visualization of it. \n
            - api.cc_alignments() -> returns conformance checking results based on alignments, i.e., a tuple of fitness, precision, F1. \n
            - api.cc_token_based_replay() -> returns conformance checking results based on token-based replay, i.e., a tuple of fitness, precision, F1. \n
+           - api.discover_from_text(description : str) -> saves a Petri net (process model) as ``api.process_model`` in state of a process described with text. \n
+           - api.edit_model(description : str) -> modifies the discovered process model (from text or data) solely using textual description and updates the saved process model. \n
         \n
         4. Visualization:
             - api.save_pnet() -> Saves the discovered Petri net model as visualization for further analysis. \n
@@ -68,12 +105,14 @@ class PM4PYWrapper:
         \n
         RULES: \n
         - You can use only the provided methods, as well as matplotlib, seaborn, plotly, numpy and pandas for any additional data manipulation or visualization needs. \n
+        - You can use sklearn for any simple machine learning needs, e.g., clustering of cases, but avoid using it for complex modeling tasks. \n
         - Ensure that any code you generate adheres to the whitelisted libraries and can compile without errors. \n
         - If the user asks to filter (e.g. "only 2023", "remove attribute X"), write Python code to call `api.filter...`. or pandas \n
         - If you make use of other methods from allowed libraries apart from the provided api, make sure to include the necessary import statements in the generated code. \n
         - Always use the save_visualization method to save any visualization, built-in methods in matplotlib or seaborn are disabled. \n
         - Always use the save_dataframe method to save any dataframe, AVOID built-in methods in pandas. \n
-
+        - Whenever asked to edit a process model, use the `edit_model` method which takes a textual description of the required edit, and modifies the current process model solely based on the provided textual description. \n
+        - If `edit_model` fails, you can use the standard `discover_from_text` method but provide a detailed textual description of the original model (use abstraction method) and the required edit. \n
         """
 
     def _add_context(self, description: str):
@@ -188,9 +227,9 @@ class PM4PYWrapper:
         )
 
     def save_pnet(self):
-        if self.state["discovered_model"] is not None:
+        if self.state["process_model"] is not None:
             # export it using pm4py's built-in visualizer
-            net, im, fm = self.state["discovered_model"]
+            net, im, fm = self.state["process_model"]
             gviz = pn_visualizer.apply(net, im, fm)
             self.save_visualization(
                 gviz, "Discovered Petri Net", data=self.get_model_summary()
@@ -198,7 +237,7 @@ class PM4PYWrapper:
         elif self.state["event_log"] is not None:
             # Discover it
             self.discover_process_model()
-            net, im, fm = self.state["discovered_model"]
+            net, im, fm = self.state["process_model"]
             gviz = pn_visualizer.apply(net, im, fm)
             self.save_visualization(
                 gviz, "Discovered Petri Net", data=self.get_model_summary()
@@ -293,6 +332,26 @@ class PM4PYWrapper:
         )
         return (fitness, precision, f1)
 
+    # ===== ProMoAI-specific Methods ===== #
+    def discover_from_text(self, description: str):
+        pnet = self.client.from_description(description).get_petri_net()
+        self.state.save_model(pnet)
+        self._log_action(f"Discovered process model from {description}")
+
+    def edit_model(self, description: str):
+        """
+        Modifies the current process model based on a textual description
+        """
+        if self.pnet is None:
+            try:
+                self.discover_process_model()
+            except Exception:
+                raise Exception(
+                    "No process model is discovered, missing event log, discover from text first."
+                )
+        self.state.save_model(self.client.from_pnet(self.pnet, description))
+        self._log_action(f"Edited process model using {description}")
+
     def code_extraction(self, code_snippet: str, args=None):
         """
         Extracts code from a given code snippet, removing any markdown formatting.
@@ -313,6 +372,7 @@ class PM4PYWrapper:
         import numpy as np
         import pandas as pd
         import pm4py
+        import sklearn
 
         namespace = {
             "api": self,
@@ -320,6 +380,7 @@ class PM4PYWrapper:
             "np": np,
             "pm4py": pm4py,
             "plt": plt,
+            "sklearn": sklearn,
             "final_event_log": self.event_log,
         }
 
